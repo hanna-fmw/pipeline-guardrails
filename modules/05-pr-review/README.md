@@ -37,7 +37,7 @@ Add `coderabbitai` to the required status checks in [branch protection](../04-ci
 `.github/CODEOWNERS` — auto-requests review from the right person based on changed paths. Critical for monorepos. See `templates/CODEOWNERS`.
 
 ### e. Auto-label PRs
-GitHub Action (`templates/labeler.yml`) labels PRs by changed paths (`area:auth`, `area:billing`, etc.) so the AI reviewer + human can filter at a glance.
+GitHub Action (`templates/pr-labeler.workflow.yml`, with `templates/labeler.config.yml` as its config) labels PRs by changed paths (`area:auth`, `area:billing`, etc.) so the AI reviewer + human can filter at a glance.
 
 ### f. Adversarial review agents
 
@@ -79,6 +79,7 @@ For client work, every PR must link an issue (the spec). A workflow check that f
 - `templates/pull_request_template.md` — PR body scaffold
 - `templates/review-checklist.md` — human reviewer checklist
 - `templates/CODEOWNERS` — example
-- `templates/labeler.yml` + `templates/labels.yml` — auto-label workflow
+- `templates/pr-labeler.workflow.yml` → `.github/workflows/labeler.yml`
+- `templates/labeler.config.yml` → `.github/labeler.yml`
 - `templates/review-agent-safety.md` — adversarial safety-pass agent prompt
 - `templates/review-agent-quality.md` — quality-pass agent prompt

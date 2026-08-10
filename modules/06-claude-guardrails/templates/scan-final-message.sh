@@ -35,7 +35,8 @@ PATTERNS=(
   'ASIA[0-9A-Z]{16}'                        # AWS temporary key id
   'gh[pousr]_[A-Za-z0-9]{36,}'              # GitHub PAT / OAuth / refresh
   'github_pat_[A-Za-z0-9_]{60,}'            # GitHub fine-grained PAT
-  'sk-[A-Za-z0-9]{32,}'                     # OpenAI
+  'sk-(proj|svcacct|admin)-[A-Za-z0-9_-]{20,}'  # OpenAI (current)
+  'sk-[A-Za-z0-9]{32,}'                     # OpenAI (legacy)
   'sk-ant-[A-Za-z0-9_-]{20,}'               # Anthropic
   'sk_live_[A-Za-z0-9]{20,}'                # Stripe live secret
   'rk_live_[A-Za-z0-9]{20,}'                # Stripe live restricted

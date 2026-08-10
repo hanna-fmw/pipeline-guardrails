@@ -1,6 +1,9 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
 # Fast-failing local equivalent of the CI pipeline.
 pnpm typecheck || exit 1
 pnpm test --run || exit 1
+
+# Secrets inventory must match .env.example before anything leaves the machine.
+# Names only — this never reads a value.
+if [ -f "./scripts/audit-secrets.sh" ]; then
+  bash ./scripts/audit-secrets.sh || exit 1
+fi

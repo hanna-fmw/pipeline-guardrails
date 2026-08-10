@@ -17,14 +17,14 @@ The principle: **hooks fail loud, fast, and locally**. They never "pass with war
 ## Automation
 
 ### a. Pre-commit: secret + PII scan
-Install [`git-guard`](https://github.com/hanna-fmw/git-guard) — sets `core.hooksPath ~/.git-hooks`, applies to every repo. Add patterns for: your real name + variants, real client emails, server IPs, machine-local paths (`/Users/<you>/...`). Block any match. See its README for pattern setup.
+Install [`git-guard`](https://github.com/hanna-fmw/git-guard) — sets `core.hooksPath ~/.git-hooks`, which applies to every repo **that does not set its own**. husky sets a repo-local `core.hooksPath`, and git honours only one, so in any husky repo the global hook is skipped entirely and the scans must be called from `.husky/pre-commit` instead (the template does this). Add patterns for: your real name + variants, real client emails, server IPs, machine-local paths (`/Users/<you>/...`). Block any match. See its README for pattern setup.
 
 For the AI-leak class specifically: `git-guard` catches the *path/value* class. Pair with [`gitleaks`](https://github.com/gitleaks/gitleaks) for *format* class (AWS keys, GitHub PATs, Stripe keys, JWTs).
 
 ```sh
 brew install gitleaks
 # add to ~/.git-hooks/pre-commit (after git-guard's existing logic):
-gitleaks protect --staged --redact -v || exit 1
+gitleaks git --staged --redact --no-banner || exit 1
 ```
 
 ### b. Global `.gitignore`

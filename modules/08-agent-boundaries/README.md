@@ -20,13 +20,18 @@ Senior devs treat an agent like a new contractor with production access: useful,
 
 Claude Code ships an OS-enforced Bash sandbox (Seatbelt on macOS, bubblewrap on Linux/WSL2). It applies to every sandboxed command **and its child processes**, which is the part no hand-rolled wrapper can do. Turn it on before writing any rules of your own: `/sandbox`, or `sandbox.enabled` in settings.
 
+**Know the trade-off before you enable it.** `autoAllowBashIfSandboxed` defaults to `true`, so switching the sandbox on also **auto-approves every sandboxed Bash command**. You are exchanging per-command prompts for an OS boundary. That is usually the right trade, but it is not a pure tightening, and a reader who expects prompts to continue will be surprised. Set it to `false` to keep prompting and still get isolation.
+
 The settings that make it a control rather than a suggestion, all in `templates/settings.json.example`:
 
 - **`allowUnsandboxedCommands: false`** — the hard gate. Left at the default, a command that fails under the sandbox can be retried outside it, where only the permission prompt stands in the way.
 - **`failIfUnavailable: true`** — otherwise a missing dependency downgrades you to no sandbox with a warning you'll scroll past.
 - **`sandbox.credentials`** — the purpose-built credential layer: `deny` on a file blocks reads inside the sandbox, `deny` on an env var unsets it before each sandboxed command. There is no built-in default list, so only what you list is protected. Deny entries merge across settings scopes and only narrow access, so any scope can add one and none can remove another's.
-- **`sandbox.network.allowedDomains`** — egress allowlist. This is what stops a compromised dependency or an injected instruction from posting your source somewhere.
+- **`sandbox.network.strictAllowlist: true` + `allowedDomains`** — the egress control. `allowedDomains` on its own is **not** an allowlist: nothing is pre-allowed by default and an unlisted domain simply prompts, so listing domains only removes prompts. `strictAllowlist` is what makes it deny-by-default, and it is honored only from user settings, managed settings, or `--settings` — put it in `~/.claude/settings.json`, because in a project `.claude/settings.json` it is silently ignored.
+- **`excludedCommands`** — with `allowUnsandboxedCommands: false` there is no escape hatch, so any tool that genuinely cannot run sandboxed has to be listed here or it is simply blocked.
+- **`filesystem.denyRead: ["~/"]` with `allowRead: ["."]`** — deny the home directory and re-open only the project. Enumerating sensitive paths one at a time is a list you are permanently behind on; inverting it is the documented shape. A narrower allow re-opens part of a denied region, and an exact deny still holds inside a wider allow.
 - **Leave `filesystem.disabled` alone.** With writes unrestricted, a sandboxed command can edit shell startup files or `settings.json` and widen its own access on the next run.
+- **`CLAUDE_CODE_SUBPROCESS_ENV_SCRUB`** — env var, not a setting. `sandbox.credentials` strips variables from *sandboxed* commands only; this strips Anthropic and cloud-provider credentials from every subprocess regardless.
 
 For stronger isolation than a Bash sandbox gives, the layered options are dev containers and VMs; the docs compare them under Sandbox environments.
 
@@ -40,7 +45,12 @@ Same file, `permissions` block, split three ways:
 - **ask** — mutating but normal: `git commit`, `git push`, package installs, `WebFetch`, and `Bash(dangerouslyDisableSandbox:true)` so an unsandboxed retry always surfaces.
 - **deny** — never unattended: force pushes, history rewrites, `rm -rf`, production deploys, migrations against a non-local host, every cloud CLI subcommand that prints credentials, and reads or writes of `.env` and key files.
 
-The deny list matters most. A generous allow list is a slow leak; a missing deny rule is a single-command outage. Audit it with `/permissions`, and enforce it across a team with managed settings, which individual users cannot override.
+Two things the docs are explicit about, and which change how much this layer is worth:
+
+- **Argument-matching Bash rules are fragile.** `Bash(git push --force:*)` means *starts with* `git push --force`, so `git push origin main --force` slips past it. Cover the common orderings, but treat the sandbox as the real boundary and this as defence in depth.
+- **`Write(path)` rules are accepted and never consulted** — Claude Code warns at startup and checks `Read()` and `Edit()` only. Use `Edit()`; it covers writes.
+
+A generous allow list is a slow leak; a missing deny rule is a single-command outage. Audit with `/permissions`, enforce across a team with managed settings, and add `disableBypassPermissionsMode` there — every deny rule is void under `bypassPermissions`.
 
 ### c. Protect the config itself
 

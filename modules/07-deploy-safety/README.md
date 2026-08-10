@@ -56,7 +56,7 @@ GitHub Environments give per-environment secrets + per-environment required revi
 `templates/ROLLBACK.md` — per-deploy-target, copy-pasteable rollback steps for Vercel + Coolify. Lives in the repo; updated whenever the deploy pipeline changes.
 
 ### g. Sentry (or equivalent) error monitoring
-Spike alerts on error rate or new error types in the first 15 min post-deploy. Webhook to Slack/Discord. See `templates/sentry-alert-rules.md`.
+Spike alerts on error rate or new error types in the first 15 minutes post-deploy, with a webhook to Slack/Discord. Configure in Sentry's UI — the alert rules are account-specific and there is nothing useful to template.
 
 ## Maintenance
 
@@ -71,5 +71,4 @@ Spike alerts on error rate or new error types in the first 15 min post-deploy. W
 - `templates/deploy.yml` — GH Actions deploy workflow
 - `templates/smoke-test.sh` — post-deploy smoke test
 - `templates/ROLLBACK.md` — rollback playbook template
-- `templates/sentry-alert-rules.md` — alert config
 - `templates/vercel.json` — sample with maxDuration set per route

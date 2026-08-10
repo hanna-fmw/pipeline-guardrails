@@ -1,4 +1,5 @@
-# .github/labeler.yml — path-based PR auto-labels.
+# Destination: .github/labeler.yml — path-based PR auto-labels.
+# (the WORKFLOW that consumes this is pr-labeler.workflow.yml)
 # Tune to your repo structure.
 
 area:auth:

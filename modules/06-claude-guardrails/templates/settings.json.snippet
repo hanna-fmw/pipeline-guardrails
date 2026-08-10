@@ -1,9 +1,10 @@
 {
-  "_comment": "Paste these blocks into ~/.claude/settings.json. Adjust paths if you don't symlink the scripts to ~/.claude/hooks/.",
+  "_comment": "Paste these blocks into ~/.claude/settings.json. Adjust paths if you don't symlink the scripts to ~/.claude/hooks/. All three layers are here on purpose — a snippet wiring only two of them silently leaves the third documented but never running.",
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Read|Bash",
+        "_comment": "Edit/Write/Grep matter as much as Read. A Read-only matcher leaves `Edit .env` unguarded.",
+        "matcher": "Read|Edit|Write|Grep|Glob|Bash",
         "hooks": [
           { "type": "command", "command": "~/.claude/hooks/block-secret-paths.sh" }
         ]
@@ -14,6 +15,13 @@
         "matcher": "Bash",
         "hooks": [
           { "type": "command", "command": "~/.claude/hooks/scrub-bash-output.sh" }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "~/.claude/hooks/scan-final-message.sh" }
         ]
       }
     ]

@@ -25,7 +25,7 @@ Add to `~/.claude/settings.json` (or per-project `.claude/settings.json`):
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Read|Bash",
+        "matcher": "Read|Edit|Write|Grep|Glob|Bash",
         "hooks": [
           { "type": "command", "command": "~/.claude/hooks/block-secret-paths.sh" }
         ]
@@ -35,10 +35,14 @@ Add to `~/.claude/settings.json` (or per-project `.claude/settings.json`):
 }
 ```
 
-The hook script (`templates/block-secret-paths.sh`) blocks reads of `.env*`, `*.pem`, `*.key`, `id_rsa*`, `~/.aws/`, `~/.ssh/`, `~/.config/gh/`, browser cookie stores, and 1Password exports. Exits non-zero with a message → Claude sees a permission denial and must adjust.
+The matcher must include the edit tools: a hook wired to `Read|Bash` alone leaves `Edit .env` completely unguarded.
+
+The hook script (`templates/block-secret-paths.sh`) blocks access to `.env*`, `*.pem`, `*.key`, `id_rsa*`, `~/.aws/`, `~/.ssh/`, `~/.config/gh/`, browser cookie stores, and 1Password exports. Exits **2** with a message → the call is blocked and Claude must adjust. Any other non-zero exit is a non-blocking error and the call proceeds, so the script fails closed (exit 2) if it cannot inspect the call at all.
 
 ### c. PostToolUse scrub on Bash output
-Same `settings.json`, `PostToolUse` matcher on `Bash`. Pipes tool output through a regex set (AWS keys, GitHub PATs `gh[ps]_…`, OpenAI `sk-…`, Stripe `sk_live_…`, JWTs, Supabase `sb_secret_…`) and rewrites matches to `[REDACTED]` before the model sees them.
+Same `settings.json`, `PostToolUse` matcher on `Bash`. Matches a regex set (AWS, GitHub, OpenAI, Anthropic, Stripe, Supabase, Slack, JWTs, private keys, connection strings) and returns the redacted text as `hookSpecificOutput.updatedToolOutput`, which is the only channel Claude Code reads — rewriting the stdin envelope and echoing it back has no effect.
+
+Order the patterns most-specific-first. A generic `sk-` rule placed before `sk-ant-` swallows Anthropic keys and mislabels them.
 
 ### d. Stop hook scan on final assistant message
 Catches the rare case where the model itself generated a secret-shaped string. `templates/scan-final-message.sh` reads `.last_assistant_message` from the hook's stdin JSON and returns a `systemMessage` warning to the user.

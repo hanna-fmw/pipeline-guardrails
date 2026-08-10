@@ -1,13 +1,27 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
+# IMPORTANT: husky sets a repository-local core.hooksPath (.husky/_), and git
+# honours exactly ONE hooksPath. A repo-local setting overrides the global one,
+# so a global ~/.git-hooks/pre-commit does NOT also run here — it is skipped
+# entirely. Anything that must run on every commit has to be invoked from this
+# file. Do not assume a global scan is picking up the slack.
 
-# 1. Lint + format changed files
+# 1. Secret + PII scan (git-guard), if installed
+if [ -x "$HOME/.git-hooks/pre-commit" ]; then
+  "$HOME/.git-hooks/pre-commit" || exit 1
+fi
+
+# 2. Secret format scan on staged content
+# `gitleaks protect --staged` is deprecated (v8.19.0); `git --staged` replaces it.
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks git --staged --redact --no-banner || exit 1
+else
+  echo "gitleaks not installed — staged content was NOT scanned for secrets." >&2
+  exit 1
+fi
+
+# 3. Lint + format changed files
 pnpm exec lint-staged || exit 1
 
-# 2. Verify .env.example covers every env var used in code
+# 4. Verify .env.example covers every env var used in code
 if [ -f "./scripts/check-env-example.sh" ]; then
   bash ./scripts/check-env-example.sh || exit 1
 fi
-
-# Note: secret/PII scan and gitleaks run via the GLOBAL pre-commit
-# (~/.git-hooks/pre-commit, installed by git-guard). They fire after this hook.

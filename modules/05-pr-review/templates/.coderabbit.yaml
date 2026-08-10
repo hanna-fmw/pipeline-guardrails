@@ -11,6 +11,14 @@ reviews:
   auto_review:
     enabled: true
     drafts: false
+  # Static analysers CodeRabbit runs itself. Both are enabled by default, but
+  # naming them here makes it explicit that PR review includes a secret scan
+  # and a SAST pass, not just LLM commentary.
+  tools:
+    gitleaks:
+      enabled: true
+    semgrep:
+      enabled: true
   path_filters:
     - "!**/node_modules/**"
     - "!**/.next/**"

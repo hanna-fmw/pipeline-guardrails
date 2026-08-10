@@ -53,10 +53,10 @@ Pre-commit hook checks: every `process.env.X` (or `os.getenv("X")`) in the codeb
 - `.env.local.tmpl` contains references like `OPENAI_API_KEY=op://acme-projectX/openai-prod/value`. See `templates/.env.local.tmpl`.
 
 ### c. Rotation reminders
-A monthly launchd job runs `op item list --vault acme-projectX --format=json | jq` against each project vault, parses the `rotate-by` field, and surfaces anything within 14 days via macOS notification. See `templates/rotation-check.sh` + `templates/dev.pipeline-guardrails.rotation-check.plist`.
+A recurring job (launchd, cron, or a scheduled CI workflow) runs `op item list --vault acme-projectX --format=json | jq` against each project vault, parses the `rotate-by` field, and surfaces anything due within 14 days. Not shipped as a template — the scheduling half is machine-specific, and the query above is the part worth copying.
 
 ### d. Secret inventory diff
-Pre-push hook runs `templates/audit-secrets.sh`: reads `.env.example`, reads `docs/SECRETS.md`, errors on any mismatch.
+`templates/audit-secrets.sh` compares `.env.example` against `docs/SECRETS.md` and errors on any var missing from the inventory. It reads names only, never values. Wire it into `.husky/pre-push` (module 03 ships that hook) or run it in CI — the module 03 pre-push template already calls it.
 
 ### e. Block secrets in transcripts
 Handled by [module 06](../06-claude-guardrails/) — the PreToolUse hook refuses to read `.env*` files, the PostToolUse hook scrubs secret-shaped strings from Bash output.
@@ -75,5 +75,4 @@ Handled by [module 06](../06-claude-guardrails/) — the PreToolUse hook refuses
 - `templates/.env.local.tmpl` — 1Password reference template for `op run`
 - `templates/check-env-example.sh` — pre-commit enforcement
 - `templates/audit-secrets.sh` — pre-push diff
-- `templates/rotation-check.sh` — daily/weekly rotation notifier
 - `templates/SECRETS.md.template` — per-project inventory starter

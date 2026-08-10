@@ -65,4 +65,3 @@ GitHub's auto-merge feature: enable in repo settings, then on each PR toggle "En
 - `templates/check-branch-name.sh` — pre-push branch-name validator
 - `templates/commitlint.config.js` — conventional commits config
 - `templates/.husky/commit-msg` — commitlint wiring
-- `templates/git-aliases.sh` — useful aliases (optional)

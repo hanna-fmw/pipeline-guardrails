@@ -14,8 +14,13 @@ desktop.ini
 *~
 
 # --- AI assistants ---
-CLAUDE.md
+# Personal/local agent config only. Committed agent config is a security control
+# (module 08): settings.json holds the permission and sandbox rules, and it must
+# be reviewable in a PR, so it is explicitly un-ignored here.
+CLAUDE.local.md
 .claude/
+!.claude/settings.json
+AGENTS.local.md
 .cursor/
 .cursorrules
 .aider*

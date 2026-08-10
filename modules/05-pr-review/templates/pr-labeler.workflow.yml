@@ -1,0 +1,22 @@
+# Destination: .github/workflows/labeler.yml
+# (the CONFIG file is labeler.config.yml -> .github/labeler.yml)
+name: pr-labeler
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# Required by actions/labeler: without pull-requests: write the token is
+# read-only and applying a label fails.
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  label:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/labeler@v7
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          configuration-path: .github/labeler.yml

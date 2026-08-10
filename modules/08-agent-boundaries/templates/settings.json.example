@@ -8,17 +8,24 @@
     "allowUnsandboxedCommands": false,
     "failIfUnavailable": true,
 
+    "_comment_autoallow": "READ THIS BEFORE ENABLING. autoAllowBashIfSandboxed defaults to TRUE: turning the sandbox on also auto-approves every sandboxed Bash command, so you trade per-command prompts for the sandbox boundary. That is the intended deal, but it is a real change — set it to false to keep prompting while still getting isolation.",
+    "autoAllowBashIfSandboxed": true,
+
+    "_comment_excluded": "Tools that genuinely cannot run sandboxed. With allowUnsandboxedCommands:false there is no escape hatch, so anything incompatible must be listed here or it is simply blocked.",
+    "excludedCommands": [],
+
     "filesystem": {
       "_comment": "Sandboxed commands can write to the working directory and session temp dir by default. Add only what a tool genuinely needs. Do NOT set filesystem.disabled — with writes unrestricted, a command can edit shell startup files or settings.json and widen its own access on the next run.",
       "allowWrite": [
         "~/.cache",
         "~/.npm"
       ],
+      "_comment_read": "Deny the whole home directory and re-open only what is needed. Enumerating sensitive paths one by one is a list you will always be behind on; this inverts it. A narrower allow re-opens part of a denied region, and an exact deny still holds inside a wider allow.",
       "denyRead": [
-        "~/.aws",
-        "~/.ssh",
-        "~/.config/gh",
-        "~/.claude.json"
+        "~/"
+      ],
+      "allowRead": [
+        "."
       ]
     },
 
@@ -39,7 +46,8 @@
     },
 
     "network": {
-      "_comment": "Egress allowlist for sandboxed commands. Narrow this to what your build actually resolves — it is the control that stops a compromised dependency or an injected instruction from sending your source somewhere.",
+      "_comment": "allowedDomains ALONE IS NOT AN ALLOWLIST — by default no domain is pre-allowed and a new one simply prompts, so listing domains here only skips prompts. Deny-by-default requires strictAllowlist:true, and that key is honored ONLY from user settings (~/.claude/settings.json), managed settings, or --settings. Put this block there, not in a project .claude/settings.json, or the restriction silently does not apply.",
+      "strictAllowlist": true,
       "allowedDomains": [
         "registry.npmjs.org",
         "github.com",
@@ -49,8 +57,13 @@
     }
   },
 
+  "_comment_env": "Also set CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1 in your shell profile. sandbox.credentials only strips variables from SANDBOXED commands; this strips Anthropic and cloud-provider credentials from every subprocess regardless of sandboxing.",
+
   "permissions": {
-    "_comment": "Covers Claude's own tool calls, including the ones the sandbox never sees (Read, Edit, Write, WebFetch). Deny always wins. Trim allow to what this project actually uses.",
+    "_comment": "Covers Claude's own tool calls, including the ones the sandbox never sees (Read, Edit, WebFetch). Deny always wins. Trim allow to what this project actually uses.",
+    "_comment_write": "File rules are checked against Read(path) and Edit(path) ONLY. A Write(path) rule is accepted, never consulted, and warns at startup — use Edit(), which covers writes too.",
+    "_comment_bypass": "A deny list is void under bypassPermissions mode. disableBypassPermissionsMode closes that hole, and belongs in managed settings where a user cannot undo it.",
+    "disableBypassPermissionsMode": "disable",
 
     "allow": [
       "Bash(git status:*)",
@@ -76,13 +89,18 @@
       "WebFetch"
     ],
 
+    "_comment_fragile": "Argument-matching Bash rules are fragile by design: `Bash(git push --force:*)` means the command STARTS WITH `git push --force`, so `git push origin main --force` does not match. Cover the common orderings, and treat the sandbox — not this list — as the real boundary.",
     "deny": [
       "Bash(git push --force:*)",
       "Bash(git push -f:*)",
+      "Bash(git push * --force*)",
+      "Bash(git push * -f)",
       "Bash(git reset --hard:*)",
       "Bash(git filter-repo:*)",
       "Bash(git filter-branch:*)",
       "Bash(rm -rf:*)",
+      "Bash(rm -fr:*)",
+      "Bash(rm -r -f:*)",
       "Bash(sudo:*)",
 
       "Bash(vercel deploy --prod:*)",
@@ -119,9 +137,7 @@
       "Read(~/.claude.json)",
 
       "Edit(./.env)",
-      "Edit(./.env.*)",
-      "Write(./.env)",
-      "Write(./.env.*)"
+      "Edit(./.env.*)"
     ]
   }
 }
