@@ -11,8 +11,10 @@ INVENTORY="${2:-docs/SECRETS.md}"
 [ -f "$EXAMPLE" ]   || { echo "missing $EXAMPLE" >&2; exit 1; }
 [ -f "$INVENTORY" ] || { echo "missing $INVENTORY — every project needs a secrets inventory" >&2; exit 1; }
 
-# Variable names from .env.example: strip comments and blanks, take the LHS of =
-example_vars=$(grep -vE '^\s*(#|$)' "$EXAMPLE" | sed -E 's/^\s*(export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=.*/\2/' | sort -u)
+# Variable names: strip comments and blanks, take the LHS of =.
+# POSIX classes, not \s — \s is a GNU extension and silently fails to match
+# under the BSD sed that ships with macOS.
+example_vars=$(grep -vE '^\s*(#|$)' "$EXAMPLE" | sed -E 's/^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*=.*/\2/' | sort -u)
 
 # Variable names mentioned anywhere in the inventory (table cells, backticks, prose)
 inventory_vars=$(grep -oE '\b[A-Z][A-Z0-9_]{2,}\b' "$INVENTORY" | sort -u)

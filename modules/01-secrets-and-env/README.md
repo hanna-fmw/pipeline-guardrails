@@ -56,7 +56,7 @@ Pre-commit hook checks: every `process.env.X` (or `os.getenv("X")`) in the codeb
 A recurring job (launchd, cron, or a scheduled CI workflow) runs `op item list --vault acme-projectX --format=json | jq` against each project vault, parses the `rotate-by` field, and surfaces anything due within 14 days. Not shipped as a template — the scheduling half is machine-specific, and the query above is the part worth copying.
 
 ### d. Secret inventory diff
-`templates/audit-secrets.sh` compares `.env.example` against `docs/SECRETS.md` and errors on any var missing from the inventory. It reads names only, never values. Wire it into `.husky/pre-push` (module 03 ships that hook) or run it in CI — the module 03 pre-push template already calls it.
+`templates/audit-secrets.sh` compares `.env.example` against `docs/SECRETS.md` and errors on any var missing from the inventory. It reads names only, never values. The module 03 pre-push template already calls it. Local hook only: `docs/SECRETS.md` is gitignored, so it does not exist in a CI checkout and the script would fail there on a missing file.
 
 ### e. Block secrets in transcripts
 Handled by [module 06](../06-claude-guardrails/) — the PreToolUse hook refuses to read `.env*` files, the PostToolUse hook scrubs secret-shaped strings from Bash output.
