@@ -15,7 +15,7 @@ The model can be persuaded, tricked, or simply drift. The hooks cannot.
 ## Automation
 
 ### a. Heartbeat (drift prevention)
-Install [`heartbeat-hook`](../../../heartbeat-hook/) — re-injects the top rules every N prompts (default 8). Already proven, just enable.
+A `UserPromptSubmit` hook that re-injects the top rules every N prompts (default 8). Long sessions drift; a rule stated once at the start is not a rule by message sixty.
 
 ### b. PreToolUse block on sensitive paths
 Add to `~/.claude/settings.json` (or per-project `.claude/settings.json`):

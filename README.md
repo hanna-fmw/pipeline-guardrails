@@ -15,6 +15,7 @@ Each module is self-contained: a short README explaining the **practice** (what 
 | 05 | [pr-review](modules/05-pr-review/) | CodeRabbit setup, PR template, review checklist, required checks |
 | 06 | [claude-guardrails](modules/06-claude-guardrails/) | Claude Code hooks that block secrets/PII before they enter transcripts |
 | 07 | [deploy-safety](modules/07-deploy-safety/) | Vercel / Coolify pre-deploy gates, preview env protection, rollback drills |
+| 08 | [agent-boundaries](modules/08-agent-boundaries/) | Agent permissions, sandboxed workspaces, MCP/plugin admission policy, connected-tool audits |
 
 ## Usage
 

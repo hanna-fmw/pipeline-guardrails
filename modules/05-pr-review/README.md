@@ -39,7 +39,25 @@ Add `coderabbitai` to the required status checks in [branch protection](../04-ci
 ### e. Auto-label PRs
 GitHub Action (`templates/labeler.yml`) labels PRs by changed paths (`area:auth`, `area:billing`, etc.) so the AI reviewer + human can filter at a glance.
 
-### f. Require linked issue (optional)
+### f. Adversarial review agents
+
+CodeRabbit reviews the diff as written. An adversarial agent is told to **break it**, which surfaces a different class of finding — the reviewer that asks "what input makes this wrong?" beats the reviewer that asks "is this idiomatic?".
+
+Two passes, run as separate agents so neither dilutes the other:
+
+- **Safety pass** (`templates/review-agent-safety.md`) — tries to find the input, state, or ordering that causes data loss, a permission bypass, a leaked secret, an unbounded spend, or a destructive migration. Runs on every PR that touches auth, migrations, deploy config, payments, or anything writing to production.
+- **Quality pass** (`templates/review-agent-quality.md`) — duplication, dead abstraction, misplaced logic, missing test coverage for the branch just added. Not safety, but the same mechanism, and cheap to run alongside.
+
+Rules that make this useful rather than noisy:
+
+1. **Verify before reporting.** An agent must be able to state the concrete input and the resulting wrong output. A finding it cannot demonstrate gets dropped, not reported as a "potential issue".
+2. **Separate agents, separate lenses.** Running one agent with both prompts produces a worse review than two agents with one each.
+3. **Rank by blast radius, not by count.** A stale comment and a data-destroying default must not be reported in the same register — a long undifferentiated list trains the reviewer to skim.
+4. **It is advisory, not a gate.** These agents propose; the human decides. Only CI and CodeRabbit block merge, because an agent that can block merge is an agent that can be prompt-injected into blocking merge.
+
+Run locally against the diff before pushing, or wire into CI as a non-blocking commenting job. Local is cheaper and catches things before the PR exists.
+
+### g. Require linked issue (optional)
 For client work, every PR must link an issue (the spec). A workflow check that fails if the PR body doesn't reference `#N` or `closes #N`.
 
 ## Maintenance
@@ -56,3 +74,5 @@ For client work, every PR must link an issue (the spec). A workflow check that f
 - `templates/review-checklist.md` — human reviewer checklist
 - `templates/CODEOWNERS` — example
 - `templates/labeler.yml` + `templates/labels.yml` — auto-label workflow
+- `templates/review-agent-safety.md` — adversarial safety-pass agent prompt
+- `templates/review-agent-quality.md` — quality-pass agent prompt
