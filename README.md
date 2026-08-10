@@ -28,7 +28,11 @@ Each module ends with a **Maintenance** section: what to re-check quarterly, wha
 
 ## Status
 
-Reference-first and incomplete. The modules are written and the templates are usable as-is, but there is no installer — an `init` CLI that drops configs in and verifies prerequisites is an idea, not a promise. Examples use a fictional `acme-` org and generic placeholders; substitute your own.
+Reference-first and in progress. The modules are written and the templates are usable as-is by copying them.
+
+Planned next: a `cli/` package providing `pipeline-guardrails init`, which drops the relevant configs into a repo and verifies the prerequisites (git-guard installed, 1Password CLI present, gitleaks available), and `update`, which diffs an existing repo against the latest templates. Not implemented yet — copy the templates manually until it lands.
+
+Examples use a fictional `acme-` org and generic placeholders; substitute your own.
 
 ## License
 
