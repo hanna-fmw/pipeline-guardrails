@@ -2,13 +2,13 @@
 # Format: <path>  @user-or-team
 # Last matching rule wins, so order from general → specific.
 
-*                           @hanna-fmw
+*                           @your-org/maintainers
 
-# --- High-sensitivity areas — always require Hanna's review ---
-.github/workflows/          @hanna-fmw
-.husky/                     @hanna-fmw
-.gitleaks.toml              @hanna-fmw
-.coderabbit.yaml            @hanna-fmw
-prisma/migrations/          @hanna-fmw
-docs/SECRETS.md             @hanna-fmw
-agents.md                   @hanna-fmw
+# --- High-sensitivity areas — always require a maintainer review ---
+.github/workflows/          @your-org/maintainers
+.husky/                     @your-org/maintainers
+.gitleaks.toml              @your-org/maintainers
+.coderabbit.yaml            @your-org/maintainers
+prisma/migrations/          @your-org/maintainers
+docs/SECRETS.md             @your-org/maintainers
+agents.md                   @your-org/maintainers

@@ -18,15 +18,18 @@ Each module is self-contained: a short README explaining the **practice** (what 
 
 ## Usage
 
-This repo is **both reference and template**. Two ways to use it:
+Read the module you need and copy its templates into your repo. Each module README explains what to change and in what order — nothing here is installed for you.
 
-1. **Read the modules** — each is a short course on the senior-dev practice + a copy-paste config.
-2. **Run the CLI** (`cli/`, WIP) — `npx pipeline-guardrails init` drops the relevant configs into a new or existing repo and verifies the prerequisites (git-guard installed, 1Password CLI present, etc.).
+Start with `01-secrets-and-env` and `06-claude-guardrails`; those are the highest-leverage.
 
 ## Staying up to date
 
-Each module ends with a **Maintenance** section: what to re-check quarterly, what to rotate, which upstream tool to watch for breaking changes. The CLI's `update` command (planned) will diff your repo against the latest templates.
+Each module ends with a **Maintenance** section: what to re-check quarterly, what to rotate, which upstream tool to watch for breaking changes.
 
 ## Status
 
-Scaffolded. Modules are being filled in incrementally — start with `01-secrets-and-env` and `06-claude-guardrails`, those are the highest-leverage.
+Reference-first and incomplete. The modules are written and the templates are usable as-is, but there is no installer — an `init` CLI that drops configs in and verifies prerequisites is an idea, not a promise. Examples use a fictional `acme-` org and generic placeholders; substitute your own.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

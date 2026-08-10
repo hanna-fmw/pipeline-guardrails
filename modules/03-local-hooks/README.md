@@ -17,7 +17,7 @@ The principle: **hooks fail loud, fast, and locally**. They never "pass with war
 ## Automation
 
 ### a. Pre-commit: secret + PII scan
-Install [`git-guard`](../../../git-guard/) — sets `core.hooksPath ~/.git-hooks`, applies to every repo. Add patterns for: your real name + variants, real client emails, server IPs, machine-local paths (`/Users/<you>/...`). Block any match. See `git-guard/README.md`.
+Install [`git-guard`](https://github.com/hanna-fmw/git-guard) — sets `core.hooksPath ~/.git-hooks`, applies to every repo. Add patterns for: your real name + variants, real client emails, server IPs, machine-local paths (`/Users/<you>/...`). Block any match. See its README for pattern setup.
 
 For the AI-leak class specifically: `git-guard` catches the *path/value* class. Pair with [`gitleaks`](https://github.com/gitleaks/gitleaks) for *format* class (AWS keys, GitHub PATs, Stripe keys, JWTs).
 
