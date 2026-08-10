@@ -41,7 +41,9 @@ The strongest habit: verify hooks are still *firing*, not just still present. A 
 
 ## Status
 
-Reference-first and in progress. The modules are written and the templates are usable as-is by copying them.
+Reference-first and in progress. All eight modules are written and their templates are usable as-is by copying them.
+
+The configuration and hook templates have been reviewed against the current official documentation, and the shell templates were executed to confirm they do what their README claims — a scrubber that silently redacts nothing, or a hook that stops firing after a field rename, is the characteristic failure here and does not announce itself. The workflow and deploy templates are unverified end-to-end: nothing in this repo deploys anywhere, so those can only be proven in a project that adopts them.
 
 Planned next: a `cli/` package providing `pipeline-guardrails init`, which drops the relevant configs into a repo and verifies the prerequisites (git-guard installed, 1Password CLI present, gitleaks available), and `update`, which diffs an existing repo against the latest templates. Not implemented yet — copy the templates manually until it lands.
 
