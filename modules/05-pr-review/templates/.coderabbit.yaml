@@ -1,0 +1,34 @@
+# CodeRabbit configuration — focus on bugs, security, perf. Suppress style nits.
+# Docs: https://docs.coderabbit.ai/configuration
+
+language: en
+reviews:
+  profile: chill
+  request_changes_workflow: true
+  high_level_summary: true
+  poem: false
+  review_status: true
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - "!**/node_modules/**"
+    - "!**/.next/**"
+    - "!**/dist/**"
+    - "!**/coverage/**"
+    - "!**/*.lock"
+  path_instructions:
+    - path: "**/*.{ts,tsx}"
+      instructions: |
+        Focus on: type-safety holes (any, as, !), missing Zod validation at boundaries,
+        unhandled promise rejections, race conditions in React effects, and missing
+        error handling on server actions. Skip Prettier-style comments — Prettier handles those.
+    - path: "**/*.sql"
+      instructions: |
+        Flag any data-loss risk: DROP COLUMN, NOT NULL on existing table, missing
+        transaction wrapping, missing index for new foreign key.
+    - path: "**/.env.example"
+      instructions: |
+        Confirm new vars have descriptive comments (purpose, format) and never contain values.
+chat:
+  auto_reply: true

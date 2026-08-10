@@ -1,0 +1,14 @@
+# CODEOWNERS — auto-request review based on path
+# Format: <path>  @user-or-team
+# Last matching rule wins, so order from general → specific.
+
+*                           @hanna-fmw
+
+# --- High-sensitivity areas — always require Hanna's review ---
+.github/workflows/          @hanna-fmw
+.husky/                     @hanna-fmw
+.gitleaks.toml              @hanna-fmw
+.coderabbit.yaml            @hanna-fmw
+prisma/migrations/          @hanna-fmw
+docs/SECRETS.md             @hanna-fmw
+agents.md                   @hanna-fmw

@@ -1,0 +1,34 @@
+# .github/labeler.yml — path-based PR auto-labels.
+# Tune to your repo structure.
+
+area:auth:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/auth/**'
+          - 'src/middleware.ts'
+          - 'src/proxy.ts'
+
+area:db:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'prisma/**'
+          - 'src/db/**'
+
+area:ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.github/**'
+          - '.husky/**'
+
+area:docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'README.md'
+          - 'agents.md'
+          - '**/*.md'
+
+area:ui:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'src/components/**'
+          - 'src/app/**/*.tsx'

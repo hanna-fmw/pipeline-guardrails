@@ -1,0 +1,54 @@
+# Global gitignore — applies to every repo on this machine.
+# Activate: git config --global core.excludesFile ~/.gitignore_global
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- AI assistants ---
+CLAUDE.md
+.claude/
+.cursor/
+.cursorrules
+.aider*
+.windsurf/
+.continuerc
+.copilot/
+
+# --- Env files ---
+.env
+.env.*
+!.env.example
+!.env.local.tmpl
+
+# --- Local working notes ---
+docs/
+NOTES.md
+SCRATCH.md
+TODO.local.md
+CLEAN-SLATE.md
+
+# --- Secrets-shaped files ---
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+*.p12
+*.pfx
+
+# --- Build artefacts (catch-all; per-repo .gitignore is still primary) ---
+node_modules/
+.next/
+.turbo/
+dist/
+build/
+.cache/
+coverage/

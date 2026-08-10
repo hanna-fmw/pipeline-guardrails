@@ -1,0 +1,40 @@
+name: weekly-audit
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'   # Monday 08:00 UTC
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: pnpm audit
+        run: pnpm audit --prod || true   # report, don't fail the run
+
+      - name: outdated dependencies
+        run: pnpm outdated || true
+
+      - name: gitleaks (full history)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Optional: post a summary to Slack
+      # - name: notify
+      #   uses: slackapi/slack-github-action@v1
+      #   with:
+      #     payload: '{"text":"Weekly audit done — see run for details."}'
+      #   env:
+      #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

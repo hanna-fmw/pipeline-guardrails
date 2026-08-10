@@ -1,0 +1,21 @@
+{
+  "_comment": "Paste these blocks into ~/.claude/settings.json. Adjust paths if you don't symlink the scripts to ~/.claude/hooks/.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Bash",
+        "hooks": [
+          { "type": "command", "command": "~/.claude/hooks/block-secret-paths.sh" }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          { "type": "command", "command": "~/.claude/hooks/scrub-bash-output.sh" }
+        ]
+      }
+    ]
+  }
+}

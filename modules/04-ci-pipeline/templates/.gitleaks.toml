@@ -1,0 +1,45 @@
+# Extends the gitleaks default ruleset with project-specific patterns.
+# Place at the repo root. Activate with `gitleaks detect --config=.gitleaks.toml`.
+
+[extend]
+useDefault = true
+
+# --- Project-specific additions ---
+
+[[rules]]
+id = "supabase-secret-key"
+description = "Supabase new short secret key"
+regex = '''sb_secret_[A-Za-z0-9_-]{20,}'''
+tags = ["key", "supabase"]
+
+[[rules]]
+id = "supabase-publishable-key"
+description = "Supabase publishable key (low risk but worth flagging in code)"
+regex = '''sb_publishable_[A-Za-z0-9_-]{20,}'''
+tags = ["key", "supabase"]
+
+[[rules]]
+id = "anthropic-key"
+description = "Anthropic API key"
+regex = '''sk-ant-[A-Za-z0-9_-]{20,}'''
+tags = ["key", "anthropic"]
+
+[[rules]]
+id = "coolify-api-token"
+description = "Coolify API token"
+regex = '''(?i)coolify[_-]?(api[_-]?)?token["'\s:=]{1,4}[A-Za-z0-9_-]{30,}'''
+tags = ["key", "coolify"]
+
+# --- Allowlist: known-safe dummy values that would otherwise trigger ---
+
+[allowlist]
+description = "Allowlist for fixtures and dummy values"
+paths = [
+  '''\.gitleaks\.toml$''',
+  '''(^|/)__fixtures__/''',
+  '''(^|/)tests?/.*\.(ts|tsx|js|jsx|py)$''',
+]
+regexes = [
+  '''sk_test_[A-Za-z0-9]+''',          # Stripe test keys are safe
+  '''sk-ant-test-[A-Za-z0-9_-]+''',     # Anthropic dummy test pattern
+]

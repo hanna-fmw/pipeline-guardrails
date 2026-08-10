@@ -1,0 +1,13 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# 1. Lint + format changed files
+pnpm exec lint-staged || exit 1
+
+# 2. Verify .env.example covers every env var used in code
+if [ -f "./scripts/check-env-example.sh" ]; then
+  bash ./scripts/check-env-example.sh || exit 1
+fi
+
+# Note: secret/PII scan and gitleaks run via the GLOBAL pre-commit
+# (~/.git-hooks/pre-commit, installed by git-guard). They fire after this hook.

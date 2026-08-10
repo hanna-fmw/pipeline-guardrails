@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Fast-failing local equivalent of the CI pipeline.
+pnpm typecheck || exit 1
+pnpm test --run || exit 1
