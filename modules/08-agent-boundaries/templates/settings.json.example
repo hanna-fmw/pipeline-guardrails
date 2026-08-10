@@ -1,0 +1,127 @@
+{
+  "_comment": "Agent boundary settings for .claude/settings.json (project) or ~/.claude/settings.json (user). Two independent layers: `sandbox` is enforced by the OS for every Bash command and its child processes; `permissions` is enforced by Claude Code for its own tool calls. You want both — the sandbox does not cover the Read/Edit/Write tools, and permission rules do not cover a subprocess spawned by a command you allowed. Verify against https://code.claude.com/docs/en/settings before copying: this is the layer most likely to have gained keys since.",
+
+  "sandbox": {
+    "enabled": true,
+
+    "_comment_strict": "allowUnsandboxedCommands:false is the hard gate. Left true, Claude may retry a sandbox-blocked command outside the sandbox via dangerouslyDisableSandbox, which then only faces the permission prompt. failIfUnavailable stops a missing dependency from silently downgrading you to no sandbox at all.",
+    "allowUnsandboxedCommands": false,
+    "failIfUnavailable": true,
+
+    "filesystem": {
+      "_comment": "Sandboxed commands can write to the working directory and session temp dir by default. Add only what a tool genuinely needs. Do NOT set filesystem.disabled — with writes unrestricted, a command can edit shell startup files or settings.json and widen its own access on the next run.",
+      "allowWrite": [
+        "~/.cache",
+        "~/.npm"
+      ],
+      "denyRead": [
+        "~/.aws",
+        "~/.ssh",
+        "~/.config/gh",
+        "~/.claude.json"
+      ]
+    },
+
+    "credentials": {
+      "_comment": "Purpose-built credential layer. `deny` on a file blocks reads inside the sandbox; `deny` on an env var unsets it before each sandboxed command runs. Deny entries merge across settings scopes and only ever narrow access, so any scope can add one and none can remove another's. There is no built-in default list — only what you list here is protected.",
+      "files": [
+        { "path": "~/.aws/credentials", "mode": "deny" },
+        { "path": "~/.ssh", "mode": "deny" },
+        { "path": "~/.netrc", "mode": "deny" }
+      ],
+      "envVars": [
+        { "name": "GITHUB_TOKEN", "mode": "deny" },
+        { "name": "NPM_TOKEN", "mode": "deny" },
+        { "name": "VERCEL_TOKEN", "mode": "deny" },
+        { "name": "AWS_SECRET_ACCESS_KEY", "mode": "deny" },
+        { "name": "STRIPE_SECRET_KEY", "mode": "deny" }
+      ]
+    },
+
+    "network": {
+      "_comment": "Egress allowlist for sandboxed commands. Narrow this to what your build actually resolves — it is the control that stops a compromised dependency or an injected instruction from sending your source somewhere.",
+      "allowedDomains": [
+        "registry.npmjs.org",
+        "github.com",
+        "api.github.com",
+        "objects.githubusercontent.com"
+      ]
+    }
+  },
+
+  "permissions": {
+    "_comment": "Covers Claude's own tool calls, including the ones the sandbox never sees (Read, Edit, Write, WebFetch). Deny always wins. Trim allow to what this project actually uses.",
+
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npm run test:*)",
+      "Bash(npm run typecheck:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm typecheck:*)"
+    ],
+
+    "ask": [
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(npm install:*)",
+      "Bash(pnpm add:*)",
+      "Bash(npx:*)",
+      "Bash(gh pr create:*)",
+      "Bash(dangerouslyDisableSandbox:true)",
+      "WebFetch"
+    ],
+
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git filter-repo:*)",
+      "Bash(git filter-branch:*)",
+      "Bash(rm -rf:*)",
+      "Bash(sudo:*)",
+
+      "Bash(vercel deploy --prod:*)",
+      "Bash(vercel link:*)",
+      "Bash(vercel promote:*)",
+      "Bash(prisma migrate deploy:*)",
+      "Bash(prisma db push:*)",
+      "Bash(supabase db push:*)",
+      "Bash(supabase link:*)",
+      "Bash(dropdb:*)",
+
+      "Bash(env)",
+      "Bash(printenv:*)",
+      "Bash(claude mcp list:*)",
+      "Bash(claude mcp get:*)",
+      "Bash(gh auth token:*)",
+      "Bash(vercel env pull:*)",
+      "Bash(railway variables:*)",
+      "Bash(supabase secrets list:*)",
+      "Bash(wrangler secret list:*)",
+      "Bash(heroku config:*)",
+      "Bash(terraform output:*)",
+      "Bash(docker inspect:*)",
+      "Bash(kubectl get secret:*)",
+
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Read(**/id_rsa*)",
+      "Read(**/id_ed25519*)",
+      "Read(~/.aws/**)",
+      "Read(~/.ssh/**)",
+      "Read(~/.claude.json)",
+
+      "Edit(./.env)",
+      "Edit(./.env.*)",
+      "Write(./.env)",
+      "Write(./.env.*)"
+    ]
+  }
+}

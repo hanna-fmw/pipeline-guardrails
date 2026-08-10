@@ -57,7 +57,13 @@ Rules that make this useful rather than noisy:
 
 Run locally against the diff before pushing, or wire into CI as a non-blocking commenting job. Local is cheaper and catches things before the PR exists.
 
-### g. Require linked issue (optional)
+### g. Built-in security review
+
+Before writing your own, use what ships: `/security-review` runs a security pass over the changes on the current branch, and the security-guidance plugin has Claude review and fix vulnerabilities in its own changes during the session.
+
+Run `/security-review` before opening any PR that touches auth, data access, migrations, or deploy config. It's free, it's maintained upstream, and it costs one command — the adversarial prompts in (f) are for what a general pass doesn't know about your project.
+
+### h. Require linked issue (optional)
 For client work, every PR must link an issue (the spec). A workflow check that fails if the PR body doesn't reference `#N` or `closes #N`.
 
 ## Maintenance
