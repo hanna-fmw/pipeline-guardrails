@@ -41,7 +41,9 @@ The hook script (`templates/block-secret-paths.sh`) blocks reads of `.env*`, `*.
 Same `settings.json`, `PostToolUse` matcher on `Bash`. Pipes tool output through a regex set (AWS keys, GitHub PATs `gh[ps]_…`, OpenAI `sk-…`, Stripe `sk_live_…`, JWTs, Supabase `sb_secret_…`) and rewrites matches to `[REDACTED]` before the model sees them.
 
 ### d. Stop hook scan on final assistant message
-Catches the rare case where the model itself generated a secret-shaped string. Warns the user in the terminal, does not modify the transcript.
+Catches the rare case where the model itself generated a secret-shaped string. `templates/scan-final-message.sh` reads `.last_assistant_message` from the hook's stdin JSON and returns a `systemMessage` warning to the user.
+
+It deliberately does not block (exit 2). By the time a Stop hook runs, the string is already in the transcript — blocking buys nothing and risks a stop loop. It reports which *pattern* matched, never the matched value, so the warning can't become the leak. Anything it fires on is compromised: rotate it.
 
 ### e. Project-level `CLAUDE.md` template
 Every project gets a `CLAUDE.md` block (global rules already in `~/.claude/CLAUDE.md` — this module just provides the per-project starter) that lists: project name, allowed services, forbidden data, the agent surface.
@@ -51,6 +53,8 @@ Every project gets a `CLAUDE.md` block (global rules already in `~/.claude/CLAUD
 - **Monthly:** check `~/.claude/state/heartbeat/log` — confirm hook is firing. If silent, it's broken.
 - **Quarterly:** update the secret regex set in the PostToolUse scrub. Source: `gitleaks` upstream rules.
 - **On new tool/SDK adoption:** add its key format to the regex set the same day you start using it.
+- **On a new model release:** re-read the `CLAUDE.md` template. Rules written to counter an older model's habits are often unnecessary on a newer one, and an instruction fighting a behaviour that no longer exists costs context for nothing.
+- **On a Claude Code release:** verify hook event names and JSON field names against the [hooks reference](https://code.claude.com/docs/en/hooks). A renamed field doesn't error — the hook just stops having any effect.
 - **Audit trigger:** if a transcript export ever shows a leaked value, rotate the key immediately AND add its format to the regex set.
 
 ## Files

@@ -27,6 +27,18 @@ Start with `01-secrets-and-env` and `06-claude-guardrails`; those are the highes
 
 Each module ends with a **Maintenance** section: what to re-check quarterly, what to rotate, which upstream tool to watch for breaking changes.
 
+Guardrails rot quietly. A hook that stopped firing, a regex that doesn't know the format of the API key you adopted last month, or a prompt tuned for a model that no longer needs the workaround all *look* fine — the file is still there, the config still parses, nothing errors. Silent failure is the normal failure mode here, so the review has to be scheduled rather than triggered.
+
+| Trigger | Re-check |
+|---------|----------|
+| **New model release** | Agent prompts, `CLAUDE.md` files, skills, and review-agent prompts. Phrasing that compensated for an older model's habits is often redundant on a newer one, and occasionally harmful — an instruction fighting a behaviour the model no longer has is wasted context at best. Verbose rules can usually be cut. Re-test one real task per prompt before trusting it. |
+| **New agent tooling release** | Hook event names, JSON input and output fields, settings schema, permission-rule syntax. These are the parts that break silently: a renamed field means your hook returns something the harness ignores. Re-read the hooks and settings reference, then verify each hook actually fires. |
+| **Adopting any new service** | Add its credential format to the secret regex sets (modules 04 and 06) the same day, not at the next quarterly review. |
+| **Quarterly** | Deny lists and permission rules (capability grows quietly), CODEOWNERS, connected MCP servers and plugins, and contradictions between `CLAUDE.md` files, `.claude/rules/`, and skills. |
+| **After any incident or near miss** | The rule that would have caught it. A guardrail added after the fact is the only kind that's been tested against something real. |
+
+The strongest habit: verify hooks are still *firing*, not just still present. A hook that silently stopped running looks identical to one that never had anything to catch.
+
 ## Status
 
 Reference-first and in progress. The modules are written and the templates are usable as-is by copying them.
