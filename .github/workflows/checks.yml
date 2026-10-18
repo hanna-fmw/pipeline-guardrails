@@ -18,12 +18,16 @@ jobs:
       - name: Detect package manager
         id: pm
         run: |
+          # pnpm's version comes from package.json "packageManager"; without it, use pnpm 10
+          jq -e '.packageManager' package.json >/dev/null 2>&1 || echo "pnpm_version=10" >> "$GITHUB_OUTPUT"
           if [ -f pnpm-lock.yaml ]; then echo "pm=pnpm" >> "$GITHUB_OUTPUT"
           elif [ -f package.json ]; then echo "pm=npm" >> "$GITHUB_OUTPUT"
           else echo "pm=none" >> "$GITHUB_OUTPUT"; fi
 
       - if: steps.pm.outputs.pm == 'pnpm'
         uses: pnpm/action-setup@v6
+        with:
+          version: ${{ steps.pm.outputs.pnpm_version }}
       - if: steps.pm.outputs.pm != 'none'
         uses: actions/setup-node@v7
         with:
