@@ -51,7 +51,10 @@ jobs:
       - name: Workflow and shell script lint
         run: |
           if compgen -G ".github/workflows/*.y*ml" >/dev/null; then
-            bash <(curl -sSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12 >/dev/null
+            f=actionlint_1.7.12_linux_amd64.tar.gz
+            curl -sSLo "$f" "https://github.com/rhysd/actionlint/releases/download/v1.7.12/$f"
+            echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $f" | sha256sum -c --quiet
+            tar -xzf "$f" actionlint
             ./actionlint -color
           fi
           mapfile -t sh < <(git ls-files '*.sh')
@@ -66,8 +69,11 @@ jobs:
       - name: Leaked secrets in this PR's commits
         if: github.event_name == 'pull_request'
         env:
-          GITLEAKS_VERSION: 8.30.1
+          GITLEAKS_VERSION: 8.30.1 # bump together with the checksum below
           BASE: ${{ github.event.pull_request.base.sha }}
         run: |
-          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar -xz gitleaks
+          f="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSLo "$f" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$f"
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $f" | sha256sum -c --quiet
+          tar -xzf "$f" gitleaks
           ./gitleaks git --redact --no-banner --log-opts="${BASE}..HEAD" .
