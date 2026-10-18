@@ -46,7 +46,7 @@ jobs:
         id: prep
         run: |
           last=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
-            --jq ".[].body | select(contains(\"<!-- pipeline:$KIND sha=\")) | capture(\"<!-- pipeline:$KIND sha=(?<s>[0-9a-f]+)\").s")
+            --jq ".[] | select(.user.login == \"github-actions[bot]\") | .body | select(startswith(\"<!-- pipeline:$KIND sha=\")) | capture(\"^<!-- pipeline:$KIND sha=(?<s>[0-9a-f]+)\").s")
           done_rounds=$(printf '%s' "$last" | grep -c . || true)
           last_sha=$(printf '%s\n' "$last" | tail -1)
           round=$((done_rounds + 1))
@@ -135,6 +135,7 @@ jobs:
           ROUND: ${{ steps.prep.outputs.round }}
           THREADS: ${{ steps.prep.outputs.threads }}
         run: |
+          OUT=$(jq 'walk(if type == "string" then gsub("<!--"; "&lt;!--") else . end)' <<<"$OUT")
           body=$(jq -r --arg k "$KIND" --arg sha "$HEAD_SHA" --arg r "$ROUND" --arg m "$MAX" '
             "<!-- pipeline:\($k) sha=\($sha) risk=\(.risk) -->\n### Claude \($k) · round \($r) of \($m)\n\n\(.summary)"
             + (if $k == "review" then "\n\n**Risk:** \(.risk)\(if .risk_reason then " — \(.risk_reason)" else "" end)" else "" end)

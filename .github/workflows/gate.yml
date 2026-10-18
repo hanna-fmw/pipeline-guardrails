@@ -68,7 +68,7 @@ jobs:
           # 4. Risk tier: from the review bot's own summary comment (labels can be set by anyone with write access).
           #    No review of this exact commit (e.g. rounds capped) means at least medium.
           marks=$(gh api "repos/$GH_REPO/issues/$PR/comments" --paginate \
-            --jq '.[] | select(.user.login == "github-actions[bot]") | .body | capture("<!-- pipeline:review sha=(?<sha>[0-9a-f]+) risk=(?<risk>low|medium|high) -->") | "\(.sha) \(.risk)"')
+            --jq '.[] | select(.user.login == "github-actions[bot]") | .body | capture("^<!-- pipeline:review sha=(?<sha>[0-9a-f]+) risk=(?<risk>low|medium|high) -->") | "\(.sha) \(.risk)"')
           risk=$(awk -v h="$head" '$1 == h {r=$2} END {print r}' <<<"$marks")
           if [ -z "$risk" ]; then
             last=$(tail -1 <<<"$marks" | cut -d' ' -f2)
@@ -79,12 +79,18 @@ jobs:
           jq -r '.files[].path' <<<"$pr" > /tmp/changed
           forced=$(python3 - <<'PY'
           import fnmatch, os
-          pats = [".github/", "CODEOWNERS", "REVIEW.md"]
+          pats = ["/.github/", "CODEOWNERS", "REVIEW.md"]
           for f in ("CODEOWNERS", ".github/CODEOWNERS"):
               if os.path.exists(f):
-                  pats += [l.split()[0].lstrip("/") for l in open(f) if l.strip() and not l.startswith("#")]
+                  pats += [l.split()[0] for l in open(f) if l.strip() and not l.startswith("#")]
           def hit(path, pat):
-              return path.startswith(pat) if pat.endswith("/") else fnmatch.fnmatch(path, pat)
+              # Errs toward matching: a pattern without a leading slash matches at any depth, a name also covers its folder.
+              anchored = pat.startswith("/")
+              pat = pat.strip("/")
+              forms = {pat, pat + "/*", pat.replace("**/", ""), pat.replace("**/", "") + "/*"}
+              parts = path.split("/")
+              subs = [path] if anchored else ["/".join(parts[i:]) for i in range(len(parts))]
+              return any(fnmatch.fnmatch(sub, f) for sub in subs for f in forms)
           hits = [p for p in open("/tmp/changed").read().split() if any(hit(p, q) for q in pats)]
           print(", ".join(hits[:5]))
           PY
