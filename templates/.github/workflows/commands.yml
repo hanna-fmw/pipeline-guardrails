@@ -36,7 +36,7 @@ jobs:
     with:
       pr: ${{ github.event.pull_request.number || github.event.issue.number }}
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
       issues: write
       checks: read

@@ -5,6 +5,7 @@
 #   - risk:low is fine on green; medium and high also need the owner-approved label,
 #     which is removed on every new push, so an approval covers one commit only
 #   - CI files and paths listed in CODEOWNERS always count as high
+#   - a green low-risk PR (docs/tests only, Claude agrees) merges itself unless auto_merge is false
 # On free private repos GitHub cannot lock the merge button: merge only when this check is green.
 name: gate
 on:
@@ -16,9 +17,12 @@ on:
       new_commits:
         type: boolean
         default: false
+      auto_merge:
+        type: boolean
+        default: true
 
 permissions:
-  contents: read
+  contents: write # only used to merge green low-risk PRs
   pull-requests: write
   issues: write
   checks: read
@@ -113,7 +117,10 @@ jobs:
           fi
 
           # One sticky comment with the verdict
-          if [ ${#blockers[@]} -eq 0 ]; then
+          if [ ${#blockers[@]} -eq 0 ] && [ "$risk" = low ] && [ "${{ inputs.auto_merge }}" = true ] \
+             && [ "$author" != "app/dependabot" ] && gh pr merge "$PR" --squash --match-head-commit "$head"; then
+            msg="**Gate: merged.** All checks green, every thread answered, risk low. Undo with \`/revert\`."
+          elif [ ${#blockers[@]} -eq 0 ]; then
             msg="**Gate: ready to merge.** All checks green, every thread answered, risk $risk. Squash and merge."
           else
             msg="**Gate: not ready** (risk $risk)"$'\n'"$(printf -- '- %s\n' "${blockers[@]}")"
