@@ -153,10 +153,11 @@ jobs:
           if [ -n "${note:-}" ] && [ -n "$SLACK_TOKEN" ] && [ "$(jq -r '.body // ""' <<<"$old")" != "$body" ]; then
             about=$(gh repo view "$GH_REPO" --json description --jq '.description // ""')
             text="*${GH_REPO#*/}*${about:+ ($about)}"$'\n'"PR #$PR \"$(jq -r .title <<<"$pr")\" $note"$'\n'"$(jq -r .url <<<"$pr")"
-            printf 'header = "Authorization: Bearer %s"\n' "$SLACK_TOKEN" | curl -sS -K - -o /dev/null \
+            res=$(printf 'header = "Authorization: Bearer %s"\n' "$SLACK_TOKEN" | curl -sS -K - \
               -H 'Content-Type: application/json; charset=utf-8' \
               --data "$(jq -n --arg c "${{ inputs.slack_channel }}" --arg t "$text" '{channel: $c, text: $t}')" \
-              https://slack.com/api/chat.postMessage || echo "Slack post failed."
+              https://slack.com/api/chat.postMessage || true)
+            echo "Slack: $(jq -r 'if .ok then "posted" else "failed: \(.error)" end' <<<"$res" 2>/dev/null || echo "failed: no reply")"
           fi
           if [ -n "$id" ]; then gh api -X PATCH "repos/$GH_REPO/issues/comments/$id" -f body="$body" >/dev/null
           else gh pr comment "$PR" --body "$body"; fi
