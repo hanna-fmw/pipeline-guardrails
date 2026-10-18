@@ -4,9 +4,21 @@
 name: claude-fix
 on:
   workflow_call:
+    inputs:
+      mcp_config:
+        description: MCP servers for Claude as JSON, e.g. a read-only database. Values can use ${VAR} from CLAUDE_ENV.
+        type: string
+        default: ""
+      allowed_tools:
+        description: Extra tools Claude may use, comma-separated (e.g. mcp__db__query).
+        type: string
+        default: ""
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN:
         required: true
+      CLAUDE_ENV:
+        description: Optional KEY=value lines (read-only keys only) made available to Claude.
+        required: false
 
 permissions:
   contents: write
@@ -15,10 +27,41 @@ permissions:
   id-token: write
 
 jobs:
+  admin:
+    # Only repo admins may start this: the owner on a personal repo, an org admin on an org repo
+    runs-on: ubuntu-latest
+    outputs:
+      ok: ${{ steps.check.outputs.ok }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          p=$(gh api "repos/${{ github.repository }}/collaborators/$ACTOR/permission" --jq .permission 2>/dev/null || echo none)
+          echo "$ACTOR has $p access."
+          echo "ok=$([ "$p" = admin ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
   claude:
-    if: github.event.comment.author_association == 'OWNER' || (github.event_name == 'issues' && github.event.issue.author_association == 'OWNER')
+    needs: admin
+    if: needs.admin.outputs.ok == 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Extra environment and MCP servers for Claude
+        id: extra
+        env:
+          CLAUDE_ENV: ${{ secrets.CLAUDE_ENV }}
+          MCP: ${{ inputs.mcp_config }}
+        run: |
+          while IFS= read -r line; do
+            case "$line" in ''|\#*) continue ;; esac
+            echo "::add-mask::${line#*=}"
+            echo "$line" >> "$GITHUB_ENV"
+          done <<<"$CLAUDE_ENV"
+          if [ -n "$MCP" ]; then
+            printf '%s' "$MCP" > "$RUNNER_TEMP/mcp.json"
+            echo "mcp=--mcp-config $RUNNER_TEMP/mcp.json" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/checkout@v7
         with:
           fetch-depth: 1
@@ -27,5 +70,6 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           trigger_phrase: "@claude"
           claude_args: |
-            --allowedTools "Bash(gh pr create:*)"
+            --allowedTools "Bash(gh pr create:*)${{ inputs.allowed_tools && format(',{0}', inputs.allowed_tools) || '' }}"
+            ${{ steps.extra.outputs.mcp }}
             --append-system-prompt "When you were called from an issue, finish by opening the pull request yourself with gh pr create: fill in .github/pull_request_template.md and put 'Closes #<issue number>' in the description."

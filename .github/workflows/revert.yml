@@ -12,8 +12,24 @@ permissions:
   pull-requests: write
 
 jobs:
+  admin:
+    # Only repo admins may start this: the owner on a personal repo, an org admin on an org repo
+    runs-on: ubuntu-latest
+    outputs:
+      ok: ${{ steps.check.outputs.ok }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          p=$(gh api "repos/${{ github.repository }}/collaborators/$ACTOR/permission" --jq .permission 2>/dev/null || echo none)
+          echo "$ACTOR has $p access."
+          echo "ok=$([ "$p" = admin ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
   revert:
-    if: github.event.comment.author_association == 'OWNER'
+    needs: admin
+    if: needs.admin.outputs.ok == 'true'
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}

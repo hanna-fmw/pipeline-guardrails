@@ -1,4 +1,4 @@
-# Things you can type (owner only):
+# Things you can type (repo admins only; the called workflows check it):
 #   @claude <what to do>   on a PR: Claude makes the change and pushes it to the branch
 #                          in an issue (or a new issue's text): Claude does it and opens a PR
 #   /gate                  re-check the gate, e.g. after resolving threads
@@ -19,12 +19,16 @@ jobs:
   fix:
     if: >-
       ((github.event_name == 'pull_request_review_comment' || github.event_name == 'issue_comment')
-        && contains(github.event.comment.body, '@claude') && github.event.comment.author_association == 'OWNER')
+        && contains(github.event.comment.body, '@claude') && github.event.comment.author_association != 'NONE')
       || (github.event_name == 'issues'
-        && contains(github.event.issue.body, '@claude') && github.event.issue.author_association == 'OWNER')
+        && contains(github.event.issue.body, '@claude') && github.event.issue.author_association != 'NONE')
     uses: hanna-fmw/pipeline-guardrails/.github/workflows/claude-fix.yml@main
+    # with:                                   # optional, e.g. a read-only database for bug issues
+    #   mcp_config: '{"mcpServers": {...}}'
+    #   allowed_tools: mcp__db__query
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      CLAUDE_ENV: ${{ secrets.CLAUDE_ENV }}
     permissions:
       contents: write
       pull-requests: write
@@ -35,7 +39,7 @@ jobs:
     if: >-
       (github.event_name == 'pull_request' && (github.event.action == 'closed' || github.event.label.name == 'owner-approved'))
       || (github.event_name == 'issue_comment' && github.event.issue.pull_request
-          && startsWith(github.event.comment.body, '/gate') && github.event.comment.author_association == 'OWNER')
+          && startsWith(github.event.comment.body, '/gate') && github.event.comment.author_association != 'NONE')
     uses: hanna-fmw/pipeline-guardrails/.github/workflows/gate.yml@main
     with:
       pr: ${{ github.event.pull_request.number || github.event.issue.number }}
@@ -50,7 +54,7 @@ jobs:
   revert:
     if: >-
       github.event_name == 'issue_comment' && github.event.issue.pull_request
-      && startsWith(github.event.comment.body, '/revert') && github.event.comment.author_association == 'OWNER'
+      && startsWith(github.event.comment.body, '/revert') && github.event.comment.author_association != 'NONE'
     uses: hanna-fmw/pipeline-guardrails/.github/workflows/revert.yml@main
     with:
       pr: ${{ github.event.issue.number }}
