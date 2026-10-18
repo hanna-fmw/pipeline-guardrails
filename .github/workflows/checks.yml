@@ -27,7 +27,8 @@ jobs:
       - if: steps.pm.outputs.pm != 'none'
         uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: ${{ hashFiles('.nvmrc') == '' && 'lts/*' || '' }}
+          node-version-file: ${{ hashFiles('.nvmrc') != '' && '.nvmrc' || '' }}
           cache: ${{ steps.pm.outputs.pm }}
 
       - name: Install
