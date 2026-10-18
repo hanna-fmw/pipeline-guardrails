@@ -16,6 +16,7 @@ for f in .github/workflows/pipeline.yml .github/workflows/commands.yml .github/d
     mkdir -p "$(dirname "$f")"; cp "$kit/$f" "$f"; echo "wrote   $f"
   fi
 done
+git add -f .claude/settings.json # global gitignores often hide .claude/; this file is meant to be shared
 
 gh repo edit "$slug" --enable-squash-merge --enable-merge-commit=false --enable-rebase-merge=false \
   --delete-branch-on-merge >/dev/null
