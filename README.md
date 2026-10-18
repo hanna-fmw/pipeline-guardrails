@@ -18,6 +18,10 @@ A pull-request pipeline for small teams that let AI agents write code, modelled 
 
 Depth per repo: `quick`, `standard` (2 hunters, 1 verifier each) or `deep` (4 hunters, 3 voting verifiers), set in the repo's `pipeline.yml`.
 
+## Roadmap
+
+What the CI/CD baseline still lacks lives as [issues labelled `roadmap`](https://github.com/hanna-fmw/pipeline-guardrails/issues?q=label%3Aroadmap): tests on a throwaway database, safe releases (staging, smoke checks, rollback), error alerts, feature flags, and a backups baseline. A project's own issues track only its local part.
+
 ## Install in a repo
 
 ```bash
