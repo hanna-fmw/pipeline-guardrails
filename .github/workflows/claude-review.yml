@@ -81,11 +81,11 @@ jobs:
 
           if [ "$KIND" = security ]; then
             focus="Look only for exploitable security problems this change introduces: injection (SQL, shell, path, prompt), XSS, broken authentication or access control, secrets in code or logs, unsafe deserialization, SSRF, weak crypto, unsafe file handling, untrusted input in GitHub Actions run: steps or pull_request_target, risky new dependencies. Skip theoretical issues with no plausible attack path and generic hardening advice."
-            label="Security"
+            label="🔒 Security"
             risk="Always return risk: low (the bug review sets the tier)."
           else
             focus="Look for real bugs: logic errors, broken edge cases, changes that break something elsewhere in the repo, a fix that misses the root cause, and clear breaks of a rule in CLAUDE.md or REVIEW.md that you can quote. Skip style, formatting and anything a linter catches."
-            label="Important"
+            label="⚠️ Important"
             risk="Set the risk tier from the change, not the author. low: docs, copy, tests only, small additive change behind a flag. medium: ordinary product change. high: auth, payments, secrets handling, data deletion or migrations, deploy or CI files, installers and updaters, and anything REVIEW.md lists as high risk."
           fi
 
@@ -105,15 +105,17 @@ jobs:
           $hunt
 
           For each confirmed finding:
-          - If it is a real problem introduced by this PR, post it inline with mcp__github_inline_comment__create_inline_comment (confirmed: true), starting with "**$label:**". Give the file and line as evidence, never a guess from a name. Name the class of problem and list every place in the PR where it occurs, so all of them get fixed at once. When the fix is a few lines on the commented lines, end with a GitHub \`\`\`suggestion block so it can be applied with one click; otherwise end with one line the owner can reply with, starting "@claude", that would fix it.
+          - If it is a real problem introduced by this PR, post it inline with mcp__github_inline_comment__create_inline_comment (confirmed: true), in this shape: a first line "**$label:** <the problem in one short sentence>", then "**Why it matters:**" with what goes wrong for the user, then the fix. Give the file and line as evidence, never a guess from a name. Name the class of problem and list every place in the PR where it occurs, so all of them get fixed at once. When the fix is a few lines on the commented lines, end with a GitHub \`\`\`suggestion block so it can be applied with one click; otherwise end with one line the owner can reply with, starting "@claude", that would fix it.
           - If it is minor (a nit), do not post it. Return at most 3 nits.
           - If the PR did not introduce it (pre-existing), do not post it. Return it in pre_existing.
+          Write like a senior developer explaining to a junior teammate: professional and precise, short sentences, every technical term explained the first time.
           Never repeat a finding that already has a thread. If an earlier unresolved thread of yours is now fixed in the code, return its id in fixed_threads.
 
           $risk
 
           Return structured output. "important" is the number of findings you posted inline this round. "summary" starts with that count, and says plainly "Nothing to fix." when it is 0.$([ "$KIND" = review ] && echo '
-          "explain" is for an owner who is not a senior developer and must decide whether to merge: 3 to 6 short bullets in plain English on what this change does for the people using the app, what could break, and what to try by hand before approving. No jargon; name a file only when it helps.')
+          "explain" is for an owner who is not a senior developer and must decide whether to merge: 3 to 6 short bullets in plain English on what this change does for the people using the app, what could break, and what to try by hand before approving. No jargon; name a file only when it helps.
+          "walkthrough" lists each changed file (or group of files) with one plain sentence on what changed in it.')
           EOF
             echo 'PROMPT_END'
           } >> "$GITHUB_OUTPUT"
@@ -127,7 +129,7 @@ jobs:
           prompt: ${{ steps.prep.outputs.prompt }}
           claude_args: |
             --allowedTools "Read,Grep,Glob,Task,Agent,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),mcp__github_inline_comment__create_inline_comment"
-            --json-schema '{"type":"object","properties":{"important":{"type":"integer"},"nits":{"type":"array","items":{"type":"string"}},"pre_existing":{"type":"array","items":{"type":"string"}},"risk":{"type":"string","enum":["low","medium","high"]},"risk_reason":{"type":"string"},"explain":{"type":"string"},"fixed_threads":{"type":"array","items":{"type":"string"}},"summary":{"type":"string"}},"required":["important","risk","summary"]}'
+            --json-schema '{"type":"object","properties":{"important":{"type":"integer"},"nits":{"type":"array","items":{"type":"string"}},"pre_existing":{"type":"array","items":{"type":"string"}},"risk":{"type":"string","enum":["low","medium","high"]},"risk_reason":{"type":"string"},"explain":{"type":"string"},"walkthrough":{"type":"array","items":{"type":"object","properties":{"file":{"type":"string"},"change":{"type":"string"}},"required":["file","change"]}},"fixed_threads":{"type":"array","items":{"type":"string"}},"summary":{"type":"string"}},"required":["important","risk","summary"]}'
 
       - name: Post the round summary and risk label
         if: steps.prep.outputs.skip != 'true'
@@ -138,17 +140,24 @@ jobs:
         run: |
           OUT=$(jq 'walk(if type == "string" then gsub("<!--"; "&lt;!--") else . end)' <<<"$OUT")
           body=$(jq -r --arg k "$KIND" --arg sha "$HEAD_SHA" --arg r "$ROUND" --arg m "$MAX" '
-            "<!-- pipeline:\($k) sha=\($sha) risk=\(.risk) -->\n### Claude \($k) · round \($r) of \($m)\n\n"
-            + (if .explain then "**In plain English**\n\(.explain)\n\n" else "" end) + .summary
-            + (if $k == "review" then "\n\n**Risk:** \(.risk)\(if .risk_reason then " — \(.risk_reason)" else "" end)" else "" end)
-            + (if (.nits // []) | length > 0 then "\n\n**Nits** (not blocking)\n" + ((.nits) | map("- " + .) | join("\n")) else "" end)
-            + (if (.pre_existing // []) | length > 0 then "\n\n**Pre-existing** (not caused by this PR)\n" + ((.pre_existing) | map("- " + .) | join("\n")) else "" end)
+            def dot: {"low": "🟢", "medium": "🟡", "high": "🔴"}[.] // "";
+            def fold($t; $xs): if ($xs // []) | length > 0
+              then "\n\n<details>\n<summary>\($t) (\($xs | length))</summary>\n\n" + ($xs | map("- " + .) | join("\n")) + "\n\n</details>" else "" end;
+            "<!-- pipeline:\($k) sha=\($sha) risk=\(.risk) -->\n"
+            + "## \(if $k == "security" then "🔒 Security review" else "🤖 Claude review" end) · round \($r) of \($m)\n\n"
+            + (if .explain then "### 📝 In plain English\n\n\(.explain)\n\n" else "" end)
+            + (if .important > 0 then "> [!WARNING]\n> " else "> [!TIP]\n> ✅ " end) + .summary
+            + (if $k == "review" then "\n\n### 🎯 Risk: \(.risk | dot) \(.risk)\(if .risk_reason then "\n\n\(.risk_reason)" else "" end)" else "" end)
+            + (if (.walkthrough // []) | length > 0 then "\n\n<details>\n<summary>📂 Walkthrough: what changed, file by file</summary>\n\n| File | What changed |\n|---|---|\n"
+               + (.walkthrough | map("| `\(.file)` | \(.change | gsub("\\|"; "\\|") | gsub("\n"; " ")) |") | join("\n")) + "\n\n</details>" else "" end)
+            + fold("🧹 Nits, not blocking"; .nits)
+            + fold("🕰️ Already there before this PR"; .pre_existing)
           ' <<<"$OUT")
           gh pr comment "$PR" --body "$body"
 
           # Resolve only Claude's own threads that it reports as fixed
           for id in $(jq -r '.fixed_threads // [] | .[]' <<<"$OUT"); do
-            prefix=$([ "$KIND" = security ] && echo "**Security:**" || echo "**Important:**")
+            prefix=$([ "$KIND" = security ] && echo "**🔒 Security:**" || echo "**⚠️ Important:**")
             jq -e --arg id "$id" --arg p "$prefix" 'any(.[]; .id == $id and (.body | startswith($p)))' <<<"$THREADS" >/dev/null || continue
             gh api graphql -f query='mutation($t:ID!){resolveReviewThread(input:{threadId:$t}){thread{id}}}' -F t="$id" >/dev/null
           done

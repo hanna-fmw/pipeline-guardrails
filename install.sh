@@ -36,6 +36,6 @@ else
 fi
 if security find-generic-password -s slack-agents-bot >/dev/null 2>&1; then
   security find-generic-password -s slack-agents-bot -w | gh secret set SLACK_BOT_TOKEN -R "$slug"
-  echo "set     SLACK_BOT_TOKEN secret (gate pings #needs-hanna when a PR waits for you)"
+  echo "set     SLACK_BOT_TOKEN secret (gate pings #pull-requests when a PR waits for you)"
 fi
 echo "TODO    Claude GitHub App must have access to $slug: https://github.com/apps/claude"
