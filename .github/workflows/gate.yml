@@ -54,14 +54,14 @@ jobs:
           fi
 
           pr=$(gh pr view "$PR" --json state,headRefOid,labels,mergeStateStatus,files,author,title,url)
-          old=$(gh api "repos/$GH_REPO/issues/$PR/comments" --paginate --jq '[.[] | select(.body | startswith("<!-- pipeline:gate -->"))] | last // {} | {id, body}')
+          old=$(gh api "repos/$GH_REPO/issues/$PR/comments" --paginate --jq '[.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- pipeline:gate -->")))] | last // {} | {id, body}')
           id=$(jq -r '.id // ""' <<<"$old")
           sref=$(jq -r '.body // ""' <<<"$old" | grep -o 'slack=[A-Z0-9]*:[0-9.]*' | head -1 | cut -d= -f2 || true)
           # This PR's one Slack message: edited if it exists, else posted and remembered in the gate comment
           slack() {
             [ -n "$SLACK_TOKEN" ] || return 0
             local text api data res
-            text="$1${1:+ }<$(jq -r .url <<<"$pr")|${GH_REPO#*/} #$PR>: $(jq -r .title <<<"$pr")"
+            text="$1${1:+ }<$(jq -r .url <<<"$pr")|${GH_REPO#*/} #$PR>: $(jq -r '.title | gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;")' <<<"$pr")"
             if [ -n "$sref" ]; then api=chat.update
               data=$(jq -n --arg c "${sref%%:*}" --arg ts "${sref#*:}" --arg t "$text" '{channel: $c, ts: $ts, text: $t}')
             else api=chat.postMessage
