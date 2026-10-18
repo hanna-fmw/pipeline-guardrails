@@ -33,7 +33,7 @@ It copies two small trigger workflows plus a PR template, `REVIEW.md`, Dependabo
 
 ## On the GitHub free plan
 
-Private repos on the free plan cannot lock the merge button (rulesets need GitHub Pro or a public repo). Everything above still runs; the gate is a red or green check, and you merge only on green. With Pro, make `gate` a required status check, require conversation resolution, and block direct pushes to `main`.
+Private repos on the free plan cannot lock the merge button (rulesets need GitHub Pro or a public repo). Everything above still runs; the gate is a red or green check, and you merge only on green. A PR runs the workflow files on its own branch, so a PR that edits `.github/` could fake a green gate; that is why those paths are always high risk and need your own review. With Pro, make `gate` a required status check, require conversation resolution, and block direct pushes to `main`.
 
 ## Reference modules
 
