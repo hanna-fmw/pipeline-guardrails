@@ -65,17 +65,17 @@ jobs:
             | group_by(.name) | map(max_by(.started_at))')
           pending=$(jq '[.[] | select(.status != "completed")] | length' <<<"$runs")
           failed=$(jq -r '[.[] | select(.status == "completed" and (.conclusion | IN("success","skipped","neutral") | not)) | .name] | join(", ")' <<<"$runs")
-          [ "$pending" -eq 0 ] || blockers+=("⏳ Some checks are still running. The gate looks again when they finish.")
-          [ "$(jq length <<<"$runs")" -gt 0 ] || blockers+=("⏳ No checks have run on the latest commit yet.")
-          [ -z "$failed" ] || blockers+=("❌ These checks failed: $failed. Open the **Checks** tab to see why.")
+          [ "$pending" -eq 0 ] || blockers+=("Checks still running; the gate re-runs when they finish.")
+          [ "$(jq length <<<"$runs")" -gt 0 ] || blockers+=("No checks have run on the latest commit yet.")
+          [ -z "$failed" ] || blockers+=("Failing checks: $failed (see the **Checks** tab).")
 
           # 2. Every review thread answered
           open=$(gh api graphql -f query='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){reviewThreads(first:100){nodes{isResolved}}}}}' \
             -F o="${GH_REPO%/*}" -F r="${GH_REPO#*/}" -F n="$PR" --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved | not)] | length')
-          [ "$open" -eq 0 ] || blockers+=("💬 $open review comment(s) still open. Fix each one (or reply \`@claude fix this\`), or answer it with a reason and click **Resolve conversation**.")
+          [ "$open" -eq 0 ] || blockers+=("$open unresolved review thread(s). Fix (or reply \`@claude fix this\`), or answer with a reason and resolve.")
 
           # 3. Up to date with main (stand-in for a merge queue)
-          [ "$(jq -r .mergeStateStatus <<<"$pr")" != BEHIND ] || blockers+=("🔄 main has moved on since this branch started. Click **Update branch** so the checks run on the combined code.")
+          [ "$(jq -r .mergeStateStatus <<<"$pr")" != BEHIND ] || blockers+=("Branch is behind \`main\`. Use **Update branch** so checks run on the combined code.")
 
           # 4. Risk tier: from the review bot's own summary comment (labels can be set by anyone with write access).
           #    No review of this exact commit (e.g. rounds capped) means at least medium.
@@ -123,21 +123,20 @@ jobs:
              && [ -n "$checks_start" ] && [[ "${approver#* }" > "$checks_start" ]]; then approved=true; fi
           if [ "$risk" != low ] && [ "$approved" != true ]; then
             waiting_for_owner=true
-            blockers+=("✋ Needs your approval: risk is $risk${forced:+ because it changes $forced}. Read the review above, then add the **owner-approved** label.")
+            blockers+=("Owner approval required (risk $risk${forced:+, touches $forced}). Add the \`owner-approved\` label after review.")
           fi
 
           # One sticky comment with the verdict
-          dot=$(case $risk in low) echo 🟢;; medium) echo 🟡;; *) echo 🔴;; esac)
           if [ ${#blockers[@]} -eq 0 ] && [ "$risk" = low ] && [ "${{ inputs.auto_merge }}" = true ] \
              && [ "$author" != "app/dependabot" ] && gh pr merge "$PR" --squash --match-head-commit "$head"; then
             state=merged
-            msg="## 🚦 Gate: 🎉 merged · risk $dot low"$'\n\n'"Every check passed and every comment was answered, and the change is low risk, so it merged itself. Changed your mind? Comment \`/revert\`."
+            msg="**Merge gate: merged** · risk low"$'\n\n'"All checks passed and all threads are resolved. Low-risk change, merged automatically. Comment \`/revert\` to undo."
           elif [ ${#blockers[@]} -eq 0 ]; then
             state=ready
-            msg="## 🚦 Gate: ✅ ready to merge · risk $dot $risk"$'\n\n'"Every check passed, every comment was answered$([ "$approved" = true ] && echo " and you approved it"). Click **Squash and merge**."
+            msg="**Merge gate: ready** · risk $risk"$'\n\n'"All checks passed and all threads are resolved$([ "$approved" = true ] && echo "; owner approved"). Ready to squash and merge."
           else
             state=blocked
-            msg="## 🚦 Gate: not ready yet · risk $dot $risk"$'\n\n'"**What's left before this can merge:**"$'\n'"$(printf -- '- %s\n' "${blockers[@]}")"
+            msg="**Merge gate: blocked** · risk $risk"$'\n\n'"$(printf -- '- [ ] %s\n' "${blockers[@]}")"
           fi
           echo "$msg" >> "$GITHUB_STEP_SUMMARY"
           old=$(gh api "repos/$GH_REPO/issues/$PR/comments" --paginate --jq '[.[] | select(.body | startswith("<!-- pipeline:gate -->"))] | last // {} | {id, body}')
@@ -146,9 +145,9 @@ jobs:
 
           # Slack only when the owner is needed (or a PR merged itself), and only when the verdict changed
           case $state in
-            merged) note="🎉 merged itself (low risk)" ;;
-            ready) note="✅ is ready: click Squash and merge" ;;
-            *) [ ${#blockers[@]} -eq 1 ] && [ "${waiting_for_owner:-}" = true ] && note="✋ needs your approval (risk $dot $risk)" ;;
+            merged) note="merged automatically (low risk)" ;;
+            ready) note="is ready to merge" ;;
+            *) [ ${#blockers[@]} -eq 1 ] && [ "${waiting_for_owner:-}" = true ] && note="needs your approval (risk $risk)" ;;
           esac
           if [ -n "${note:-}" ] && [ -n "$SLACK_TOKEN" ] && [ "$(jq -r '.body // ""' <<<"$old")" != "$body" ]; then
             about=$(gh repo view "$GH_REPO" --json description --jq '.description // ""')

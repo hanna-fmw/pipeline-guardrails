@@ -114,7 +114,7 @@ jobs:
           $risk
 
           Return structured output. "important" is the number of findings you posted inline this round. "summary" starts with that count, and says plainly "Nothing to fix." when it is 0.$([ "$KIND" = review ] && echo '
-          "explain" is for an owner who is not a senior developer and must decide whether to merge: 3 to 6 short bullets in plain English on what this change does for the people using the app, what could break, and what to try by hand before approving. No jargon; name a file only when it helps.
+          "explain" is the PR summary a senior engineer would write: 2 to 4 sentences of plain prose on what the change does, its effect for users, and what to verify before merging. Precise and professional, readable by a junior developer, never condescending; no bullets.
           "walkthrough" lists each changed file (or group of files) with one plain sentence on what changed in it.')
           EOF
             echo 'PROMPT_END'
@@ -140,18 +140,18 @@ jobs:
         run: |
           OUT=$(jq 'walk(if type == "string" then gsub("<!--"; "&lt;!--") else . end)' <<<"$OUT")
           body=$(jq -r --arg k "$KIND" --arg sha "$HEAD_SHA" --arg r "$ROUND" --arg m "$MAX" '
-            def dot: {"low": "🟢", "medium": "🟡", "high": "🔴"}[.] // "";
             def fold($t; $xs): if ($xs // []) | length > 0
               then "\n\n<details>\n<summary>\($t) (\($xs | length))</summary>\n\n" + ($xs | map("- " + .) | join("\n")) + "\n\n</details>" else "" end;
             "<!-- pipeline:\($k) sha=\($sha) risk=\(.risk) -->\n"
-            + "## \(if $k == "security" then "🔒 Security review" else "🤖 Claude review" end) · round \($r) of \($m)\n\n"
-            + (if .explain then "### 📝 In plain English\n\n\(.explain)\n\n" else "" end)
-            + (if .important > 0 then "> [!WARNING]\n> " else "> [!TIP]\n> ✅ " end) + .summary
-            + (if $k == "review" then "\n\n### 🎯 Risk: \(.risk | dot) \(.risk)\(if .risk_reason then "\n\n\(.risk_reason)" else "" end)" else "" end)
-            + (if (.walkthrough // []) | length > 0 then "\n\n<details>\n<summary>📂 Walkthrough: what changed, file by file</summary>\n\n| File | What changed |\n|---|---|\n"
+            + "**\(if $k == "security" then "Claude security review" else "Claude review" end)** · round \($r) of \($m)"
+            + (if $k == "review" then " · risk \(.risk)" else "" end) + "\n\n"
+            + (if .explain then "\(.explain)\n\n" else "" end)
+            + "**Findings:** " + .summary
+            + (if $k == "review" and .risk_reason then "\n\n**Risk:** \(.risk_reason)" else "" end)
+            + (if (.walkthrough // []) | length > 0 then "\n\n<details>\n<summary>📝 Walkthrough</summary>\n\n| File | Change |\n|---|---|\n"
                + (.walkthrough | map("| `\(.file)` | \(.change | gsub("\\|"; "\\|") | gsub("\n"; " ")) |") | join("\n")) + "\n\n</details>" else "" end)
-            + fold("🧹 Nits, not blocking"; .nits)
-            + fold("🕰️ Already there before this PR"; .pre_existing)
+            + fold("🧹 Nitpicks"; .nits)
+            + fold("Pre-existing issues"; .pre_existing)
           ' <<<"$OUT")
           gh pr comment "$PR" --body "$body"
 
