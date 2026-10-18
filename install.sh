@@ -34,4 +34,8 @@ else
   echo "TODO    Claude token: run 'claude setup-token' and save it in Infisical project personal,"
   echo "        env dev, folder /github, as CLAUDE_CODE_OAUTH_TOKEN; then run this script again."
 fi
+if security find-generic-password -s slack-agents-bot >/dev/null 2>&1; then
+  security find-generic-password -s slack-agents-bot -w | gh secret set SLACK_BOT_TOKEN -R "$slug"
+  echo "set     SLACK_BOT_TOKEN secret (gate pings #needs-hanna when a PR waits for you)"
+fi
 echo "TODO    Claude GitHub App must have access to $slug: https://github.com/apps/claude"

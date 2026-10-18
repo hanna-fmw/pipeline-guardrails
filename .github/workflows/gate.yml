@@ -6,6 +6,7 @@
 #     which is removed on every new push, so an approval covers one commit only
 #   - CI files and paths listed in CODEOWNERS always count as high
 #   - a green low-risk PR (docs/tests only, Claude agrees) merges itself unless auto_merge is false
+#   - Slack (optional SLACK_BOT_TOKEN secret): one message when a PR waits for the owner, or merged itself
 # On free private repos GitHub cannot lock the merge button: merge only when this check is green.
 name: gate
 on:
@@ -20,6 +21,12 @@ on:
       auto_merge:
         type: boolean
         default: true
+      slack_channel:
+        type: string
+        default: needs-hanna
+    secrets:
+      SLACK_BOT_TOKEN:
+        required: false
 
 permissions:
   contents: write # only used to merge green low-risk PRs
@@ -32,6 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
+      SLACK_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
       GH_REPO: ${{ github.repository }}
       PR: ${{ inputs.pr }}
     steps:
@@ -44,7 +52,7 @@ jobs:
             gh pr edit "$PR" --remove-label owner-approved >/dev/null 2>&1 || true
           fi
 
-          pr=$(gh pr view "$PR" --json state,headRefOid,labels,mergeStateStatus,files,author)
+          pr=$(gh pr view "$PR" --json state,headRefOid,labels,mergeStateStatus,files,author,title,url)
           [ "$(jq -r .state <<<"$pr")" = OPEN ] || { echo "PR is not open."; exit 0; }
           head=$(jq -r .headRefOid <<<"$pr")
           labels=$(jq -r '.labels[].name' <<<"$pr")
@@ -113,6 +121,7 @@ jobs:
           if grep -qx owner-approved <<<"$labels" && [ "${approver% *}" = "${GH_REPO%/*}" ] \
              && [ -n "$checks_start" ] && [[ "${approver#* }" > "$checks_start" ]]; then approved=true; fi
           if [ "$risk" != low ] && [ "$approved" != true ]; then
+            waiting_for_owner=true
             blockers+=("Risk is $risk${forced:+ (touches $forced)}. Read the evidence, then add the owner-approved label.")
           fi
 
@@ -126,8 +135,23 @@ jobs:
             msg="**Gate: not ready** (risk $risk)"$'\n'"$(printf -- '- %s\n' "${blockers[@]}")"
           fi
           echo "$msg" >> "$GITHUB_STEP_SUMMARY"
-          id=$(gh api "repos/$GH_REPO/issues/$PR/comments" --paginate --jq '.[] | select(.body | startswith("<!-- pipeline:gate -->")) | .id' | tail -1)
+          old=$(gh api "repos/$GH_REPO/issues/$PR/comments" --paginate --jq '[.[] | select(.body | startswith("<!-- pipeline:gate -->"))] | last // {} | {id, body}')
+          id=$(jq -r '.id // ""' <<<"$old")
           body="<!-- pipeline:gate -->"$'\n'"$msg"
+
+          # Slack only when the owner is needed (or a PR merged itself), and only when the verdict changed
+          case "$msg" in
+            "**Gate: merged."*) note="merged itself (low risk)" ;;
+            "**Gate: ready to merge."*) note="is ready: squash and merge it" ;;
+            *) [ ${#blockers[@]} -eq 1 ] && [ "${waiting_for_owner:-}" = true ] && note="needs your approval (risk $risk): read it, then add the owner-approved label" ;;
+          esac
+          if [ -n "${note:-}" ] && [ -n "$SLACK_TOKEN" ] && [ "$(jq -r '.body // ""' <<<"$old")" != "$body" ]; then
+            text="${GH_REPO#*/} PR #$PR \"$(jq -r .title <<<"$pr")\" $note. $(jq -r .url <<<"$pr")"
+            printf 'header = "Authorization: Bearer %s"\n' "$SLACK_TOKEN" | curl -sS -K - -o /dev/null \
+              -H 'Content-Type: application/json; charset=utf-8' \
+              --data "$(jq -n --arg c "${{ inputs.slack_channel }}" --arg t "$text" '{channel: $c, text: $t}')" \
+              https://slack.com/api/chat.postMessage || echo "Slack post failed."
+          fi
           if [ -n "$id" ]; then gh api -X PATCH "repos/$GH_REPO/issues/comments/$id" -f body="$body" >/dev/null
           else gh pr comment "$PR" --body "$body"; fi
           [ ${#blockers[@]} -eq 0 ]

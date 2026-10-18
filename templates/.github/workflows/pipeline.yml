@@ -47,6 +47,8 @@ jobs:
     with:
       pr: ${{ github.event.pull_request.number }}
       new_commits: ${{ github.event.action == 'synchronize' }}
+    secrets:
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
     permissions:
       contents: write
       pull-requests: write
