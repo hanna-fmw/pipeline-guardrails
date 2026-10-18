@@ -61,8 +61,7 @@ jobs:
           slack() {
             [ -n "$SLACK_TOKEN" ] || return 0
             local text api data res
-            about=$(gh repo view "$GH_REPO" --json description --jq '.description // ""')
-            text="*${GH_REPO#*/}*${about:+ ($about)}"$'\n'"$1: PR #$PR \"$(jq -r .title <<<"$pr")\""$'\n'"$(jq -r .url <<<"$pr")"
+            text="$1${1:+ }<$(jq -r .url <<<"$pr")|${GH_REPO#*/} #$PR>: $(jq -r .title <<<"$pr")"
             if [ -n "$sref" ]; then api=chat.update
               data=$(jq -n --arg c "${sref%%:*}" --arg ts "${sref#*:}" --arg t "$text" '{channel: $c, ts: $ts, text: $t}')
             else api=chat.postMessage
@@ -75,8 +74,8 @@ jobs:
           }
           case "$(jq -r .state <<<"$pr")" in
             OPEN) ;;
-            MERGED) [ -z "$sref" ] || slack "✅ merged"; exit 0 ;;
-            *) [ -z "$sref" ] || slack "closed without merging"; exit 0 ;;
+            MERGED) [ -z "$sref" ] || slack "✅"; exit 0 ;;
+            *) [ -z "$sref" ] || slack "✖️ closed:"; exit 0 ;;
           esac
           head=$(jq -r .headRefOid <<<"$pr")
           labels=$(jq -r '.labels[].name' <<<"$pr")
@@ -165,14 +164,14 @@ jobs:
           echo "$msg" >> "$GITHUB_STEP_SUMMARY"
           # Slack: post when the owner is needed; after that, keep editing the same message
           case $state in
-            merged) note="✅ merged automatically (low risk)" ;;
-            ready) note="ready to merge" ;;
-            *) note=$([ ${#blockers[@]} -eq 1 ] && [ "${waiting_for_owner:-}" = true ] && echo "needs your approval (risk $risk)" || echo "") ;;
+            merged) note="✅" ;;
+            ready) note=post ;;
+            *) note=$([ ${#blockers[@]} -eq 1 ] && [ "${waiting_for_owner:-}" = true ] && echo post || echo "") ;;
           esac
           prev=$(jq -r '.body // ""' <<<"$old" | sed 1,2d)
           if [ "$prev" != "$msg" ]; then
-            if [ -n "$note" ]; then slack "$note"
-            elif [ -n "$sref" ]; then slack "not ready yet"; fi
+            if [ -n "$note" ]; then slack "${note#post}"
+            elif [ -n "$sref" ]; then slack ""; fi
           fi
           body="<!-- pipeline:gate -->"$'\n'"<!-- slack=${sref:-} -->"$'\n'"$msg"
           if [ -n "$id" ]; then gh api -X PATCH "repos/$GH_REPO/issues/comments/$id" -f body="$body" >/dev/null
