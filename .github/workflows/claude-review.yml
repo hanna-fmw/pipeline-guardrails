@@ -105,7 +105,7 @@ jobs:
           $hunt
 
           For each confirmed finding:
-          - If it is a real problem introduced by this PR, post it inline with mcp__github_inline_comment__create_inline_comment (confirmed: true), starting with "**$label:**". Give the file and line as evidence, never a guess from a name. Name the class of problem and list every place in the PR where it occurs, so all of them get fixed at once.
+          - If it is a real problem introduced by this PR, post it inline with mcp__github_inline_comment__create_inline_comment (confirmed: true), starting with "**$label:**". Give the file and line as evidence, never a guess from a name. Name the class of problem and list every place in the PR where it occurs, so all of them get fixed at once. When the fix is a few lines on the commented lines, end with a GitHub \`\`\`suggestion block so it can be applied with one click; otherwise end with one line the owner can reply with, starting "@claude", that would fix it.
           - If it is minor (a nit), do not post it. Return at most 3 nits.
           - If the PR did not introduce it (pre-existing), do not post it. Return it in pre_existing.
           Never repeat a finding that already has a thread. If an earlier unresolved thread of yours is now fixed in the code, return its id in fixed_threads.
