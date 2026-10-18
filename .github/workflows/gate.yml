@@ -48,6 +48,11 @@ jobs:
 
       - name: Decide
         run: |
+          # "/gate" comments: only repo admins may trigger a gate run (it can merge low-risk PRs)
+          if [ "${{ github.event_name }}" = issue_comment ]; then
+            p=$(gh api "repos/$GH_REPO/collaborators/${{ github.actor }}/permission" --jq .permission 2>/dev/null || echo none)
+            [ "$p" = admin ] || { echo "${{ github.actor }} is not a repo admin; ignoring /gate."; exit 0; }
+          fi
           gh label create owner-approved --force --color 7c3aed --description "Owner read the evidence and approves this commit" >/dev/null
           if [ "${{ inputs.new_commits }}" = true ]; then
             gh pr edit "$PR" --remove-label owner-approved >/dev/null 2>&1 || true
