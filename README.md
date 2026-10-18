@@ -12,7 +12,7 @@ A pull-request pipeline for small teams that let AI agents write code, modelled 
 | Security review | `claude-review.yml` (kind: security) | same shape, security problems only |
 | Convergence | both reviews | round 1 reads the whole PR, later rounds only new commits, never repeats a finding, resolves its own fixed threads, stops after 3 rounds |
 | Gate | `gate.yml` | one check: green checks, every thread resolved, up to date with main, owner-approved label for medium and high risk (removed on every push), CI files and CODEOWNERS paths always high; green low-risk PRs (docs/tests only) merge themselves |
-| Fix | `claude-fix.yml` | `@claude <what to do>` on the PR; Claude pushes the change, the pipeline runs again |
+| Fix | `claude-fix.yml` | `@claude <what to do>` on a PR: Claude pushes the change and the pipeline runs again; in an issue: Claude does it and opens the PR |
 | Rollback | `revert.yml` | `/revert` on a merged PR opens the undo PR |
 | Dependencies | `templates/.github/dependabot.yml` | weekly grouped npm updates, monthly action updates |
 

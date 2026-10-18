@@ -1,4 +1,5 @@
 # "@claude <what to do>" in a PR comment: Claude makes the change and pushes it to the PR branch.
+# In an issue: Claude does the work on a new branch and opens a PR that closes the issue.
 # Its push comes from the Claude GitHub App, so the whole pipeline runs again on the new commit.
 name: claude-fix
 on:
@@ -15,7 +16,7 @@ permissions:
 
 jobs:
   claude:
-    if: github.event.comment.author_association == 'OWNER'
+    if: github.event.comment.author_association == 'OWNER' || (github.event_name == 'issues' && github.event.issue.author_association == 'OWNER')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -25,3 +26,6 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           trigger_phrase: "@claude"
+          claude_args: |
+            --allowedTools "Bash(gh pr create:*)"
+            --append-system-prompt "When you were called from an issue, finish by opening the pull request yourself with gh pr create: fill in .github/pull_request_template.md and put 'Closes #<issue number>' in the description."
