@@ -1,0 +1,145 @@
+# Claude reviews a pull request, either for bugs (kind: review) or security (kind: security).
+# Hunters find candidates, verifiers try to disprove each one, only survivors are posted inline.
+# Converges: round 1 reads the whole PR, later rounds only the new commits, and it stops after max_rounds.
+# The bug review also sets the PR's risk label, which the gate uses to decide who must approve.
+name: claude-review
+on:
+  workflow_call:
+    inputs:
+      kind:
+        type: string
+        default: review # review | security
+      depth:
+        type: string
+        default: standard # quick | standard | deep
+      max_rounds:
+        type: number
+        default: 3
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  claude:
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ github.event.pull_request.number }}
+      REPO: ${{ github.repository }}
+      KIND: ${{ inputs.kind }}
+      DEPTH: ${{ inputs.depth }}
+      MAX: ${{ inputs.max_rounds }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Work out the round and build the prompt
+        id: prep
+        run: |
+          last=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq ".[].body | select(contains(\"<!-- pipeline:$KIND sha=\")) | capture(\"<!-- pipeline:$KIND sha=(?<s>[0-9a-f]+)\").s")
+          done_rounds=$(printf '%s' "$last" | grep -c . || true)
+          last_sha=$(printf '%s\n' "$last" | tail -1)
+          round=$((done_rounds + 1))
+          echo "round=$round" >> "$GITHUB_OUTPUT"
+
+          if [ "$round" -gt "$MAX" ]; then
+            if [ "$round" -eq $((MAX + 1)) ]; then
+              gh pr comment "$PR" --body "<!-- pipeline:$KIND-capped -->
+          **Claude $KIND: $MAX rounds reached.** Later pushes are not reviewed automatically. If findings keep coming back, step back and reconsider the approach rather than patching line by line."
+            fi
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+
+          if [ -n "$last_sha" ] && git cat-file -e "$last_sha" 2>/dev/null; then
+            scope="Only the commits since your last review. Run \`git diff $last_sha..HEAD\`. The rest of the PR was already reviewed; do not re-review it."
+          else
+            scope="The whole pull request. Run \`gh pr diff $PR\`."
+          fi
+
+          case "$DEPTH" in
+            quick) hunt="Hunt for problems yourself, then re-read the code around each candidate to confirm it." ;;
+            deep)  hunt="Launch 4 subagents in parallel, each hunting independently. Then, for each candidate, launch 3 verifier subagents that try to prove it wrong by reading the actual code. Keep a finding only if at least 2 verifiers confirm it." ;;
+            *)     hunt="Launch 2 subagents in parallel, each hunting independently. Then, for each candidate, launch 1 verifier subagent that tries to prove it wrong by reading the actual code. Keep only confirmed findings." ;;
+          esac
+
+          threads="gh api graphql -f query='query(\$o:String!,\$r:String!,\$n:Int!){repository(owner:\$o,name:\$r){pullRequest(number:\$n){reviewThreads(first:100){nodes{id isResolved comments(first:1){nodes{body path line}}}}}}}' -F o=${REPO%/*} -F r=${REPO#*/} -F n=$PR"
+
+          if [ "$KIND" = security ]; then
+            focus="Look only for exploitable security problems this change introduces: injection (SQL, shell, path, prompt), XSS, broken authentication or access control, secrets in code or logs, unsafe deserialization, SSRF, weak crypto, unsafe file handling, untrusted input in GitHub Actions run: steps or pull_request_target, risky new dependencies. Skip theoretical issues with no plausible attack path and generic hardening advice."
+            label="Security"
+            risk="Always return risk: low (the bug review sets the tier)."
+          else
+            focus="Look for real bugs: logic errors, broken edge cases, changes that break something elsewhere in the repo, a fix that misses the root cause, and clear breaks of a rule in CLAUDE.md or REVIEW.md that you can quote. Skip style, formatting and anything a linter catches."
+            label="Important"
+            risk="Set the risk tier from the change, not the author. low: docs, copy, tests only, small additive change behind a flag. medium: ordinary product change. high: auth, payments, secrets handling, data deletion or migrations, deploy or CI files, installers and updaters, and anything REVIEW.md lists as high risk."
+          fi
+
+          {
+            echo 'prompt<<PROMPT_END'
+            cat <<EOF
+          You are the automated $KIND reviewer for pull request #$PR in $REPO. The PR branch is checked out. This is round $round of at most $MAX.
+
+          Scope: $scope
+
+          Read first: CLAUDE.md or AGENTS.md (root and in changed folders), REVIEW.md if present, the PR title and description (\`gh pr view $PR\`), and the existing review threads (\`$threads\`).
+
+          $focus
+
+          $hunt
+
+          For each confirmed finding:
+          - If it is a real problem introduced by this PR, post it inline with mcp__github_inline_comment__create_inline_comment (confirmed: true), starting with "**$label:**". Give the file and line as evidence, never a guess from a name. Name the class of problem and list every place in the PR where it occurs, so all of them get fixed at once.
+          - If it is minor (a nit), do not post it. Return at most 3 nits.
+          - If the PR did not introduce it (pre-existing), do not post it. Return it in pre_existing.
+          Never repeat a finding that already has a thread. If an earlier finding of yours is now fixed, resolve its thread with the resolveReviewThread GraphQL mutation.
+
+          $risk
+
+          Return structured output. "important" is the number of findings you posted inline this round. "summary" starts with that count, and says plainly "Nothing to fix." when it is 0.
+          EOF
+            echo 'PROMPT_END'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Claude ${{ inputs.kind }}
+        id: claude
+        if: steps.prep.outputs.skip != 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: ${{ steps.prep.outputs.prompt }}
+          claude_args: |
+            --allowedTools "Read,Grep,Glob,Task,Agent,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh api graphql:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),mcp__github_inline_comment__create_inline_comment"
+            --json-schema '{"type":"object","properties":{"important":{"type":"integer"},"nits":{"type":"array","items":{"type":"string"}},"pre_existing":{"type":"array","items":{"type":"string"}},"risk":{"type":"string","enum":["low","medium","high"]},"risk_reason":{"type":"string"},"summary":{"type":"string"}},"required":["important","risk","summary"]}'
+
+      - name: Post the round summary and risk label
+        if: steps.prep.outputs.skip != 'true'
+        env:
+          OUT: ${{ steps.claude.outputs.structured_output }}
+          ROUND: ${{ steps.prep.outputs.round }}
+        run: |
+          body=$(jq -r --arg k "$KIND" --arg sha "$HEAD_SHA" --arg r "$ROUND" --arg m "$MAX" '
+            "<!-- pipeline:\($k) sha=\($sha) -->\n### Claude \($k) · round \($r) of \($m)\n\n\(.summary)"
+            + (if $k == "review" then "\n\n**Risk:** \(.risk)\(if .risk_reason then " — \(.risk_reason)" else "" end)" else "" end)
+            + (if (.nits // []) | length > 0 then "\n\n**Nits** (not blocking)\n" + ((.nits) | map("- " + .) | join("\n")) else "" end)
+            + (if (.pre_existing // []) | length > 0 then "\n\n**Pre-existing** (not caused by this PR)\n" + ((.pre_existing) | map("- " + .) | join("\n")) else "" end)
+          ' <<<"$OUT")
+          gh pr comment "$PR" --body "$body"
+
+          if [ "$KIND" = review ]; then
+            risk=$(jq -r .risk <<<"$OUT")
+            for t in low medium high; do
+              gh label create "risk:$t" --force --color "$( [ $t = low ] && echo 2f7d4f || ([ $t = medium ] && echo b45309 || echo b91c1c))" >/dev/null
+              [ "$t" = "$risk" ] || gh pr edit "$PR" --remove-label "risk:$t" >/dev/null 2>&1 || true
+            done
+            gh pr edit "$PR" --add-label "risk:$risk"
+          fi

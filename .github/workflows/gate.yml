@@ -1,0 +1,100 @@
+# The merge gate: one green or red check that says whether the PR is safe to merge, and if not, exactly what is missing.
+#   - every check on the latest commit is green
+#   - every review thread is resolved (fixed, or answered with a reason)
+#   - the branch is up to date with main
+#   - risk:low is fine on green; medium and high also need the owner-approved label,
+#     which is removed on every new push, so an approval covers one commit only
+#   - CI files and paths listed in CODEOWNERS always count as high
+# On free private repos GitHub cannot lock the merge button: merge only when this check is green.
+name: gate
+on:
+  workflow_call:
+    inputs:
+      pr:
+        type: number
+        required: true
+      new_commits:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  checks: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR: ${{ inputs.pr }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Decide
+        run: |
+          gh label create owner-approved --force --color 7c3aed --description "Owner read the evidence and approves this commit" >/dev/null
+          if [ "${{ inputs.new_commits }}" = true ]; then
+            gh pr edit "$PR" --remove-label owner-approved >/dev/null 2>&1 || true
+          fi
+
+          pr=$(gh pr view "$PR" --json state,headRefOid,labels,mergeStateStatus,files,author)
+          [ "$(jq -r .state <<<"$pr")" = OPEN ] || { echo "PR is not open."; exit 0; }
+          head=$(jq -r .headRefOid <<<"$pr")
+          labels=$(jq -r '.labels[].name' <<<"$pr")
+          author=$(jq -r .author.login <<<"$pr")
+          blockers=()
+
+          # 1. Checks on the latest commit (the gate itself excluded; latest run per check name wins)
+          runs=$(gh api "repos/$GH_REPO/commits/$head/check-runs?per_page=100" --jq '
+            [.check_runs[] | select(.name | test("gate") | not)]
+            | group_by(.name) | map(max_by(.started_at))')
+          pending=$(jq '[.[] | select(.status != "completed")] | length' <<<"$runs")
+          failed=$(jq -r '.[] | select(.status == "completed" and (.conclusion | IN("success","skipped","neutral") | not)) | .name' <<<"$runs")
+          [ "$pending" -eq 0 ] || blockers+=("Checks still running. The gate runs again when the pipeline finishes.")
+          [ "$(jq length <<<"$runs")" -gt 0 ] || blockers+=("No checks have run on this commit yet.")
+          [ -z "$failed" ] || blockers+=("Failing checks: $(echo $failed | sed 's/ /, /g').")
+
+          # 2. Every review thread answered
+          open=$(gh api graphql -f query='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){reviewThreads(first:100){nodes{isResolved}}}}}' \
+            -F o="${GH_REPO%/*}" -F r="${GH_REPO#*/}" -F n="$PR" --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved | not)] | length')
+          [ "$open" -eq 0 ] || blockers+=("$open review thread(s) still open. Fix them, or resolve each with a short reason.")
+
+          # 3. Up to date with main (stand-in for a merge queue)
+          [ "$(jq -r .mergeStateStatus <<<"$pr")" != BEHIND ] || blockers+=("Branch is behind main. Click \"Update branch\" so the checks run on the combined code.")
+
+          # 4. Risk tier: the review's label, raised to high for CI files and CODEOWNERS paths
+          risk=$(grep -oP '^risk:\K\w+' <<<"$labels" | head -1 || true)
+          [ -n "$risk" ] || { [ "$author" = "app/dependabot" ] && risk=low || risk=medium; }
+          jq -r '.files[].path' <<<"$pr" > /tmp/changed
+          forced=$(python3 - <<'PY'
+          import fnmatch, os
+          pats = [".github/", "CODEOWNERS", "REVIEW.md"]
+          for f in ("CODEOWNERS", ".github/CODEOWNERS"):
+              if os.path.exists(f):
+                  pats += [l.split()[0].lstrip("/") for l in open(f) if l.strip() and not l.startswith("#")]
+          def hit(path, pat):
+              return path.startswith(pat) if pat.endswith("/") else fnmatch.fnmatch(path, pat)
+          hits = [p for p in open("/tmp/changed").read().split() if any(hit(p, q) for q in pats)]
+          print(", ".join(hits[:5]))
+          PY
+          )
+          [ -z "$forced" ] || risk=high
+          if [ "$risk" != low ] && ! grep -qx owner-approved <<<"$labels"; then
+            blockers+=("Risk is $risk${forced:+ (touches $forced)}. Read the evidence, then add the owner-approved label.")
+          fi
+
+          # One sticky comment with the verdict
+          if [ ${#blockers[@]} -eq 0 ]; then
+            msg="**Gate: ready to merge.** All checks green, every thread answered, risk $risk. Squash and merge."
+          else
+            msg="**Gate: not ready** (risk $risk)"$'\n'"$(printf -- '- %s\n' "${blockers[@]}")"
+          fi
+          echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+          id=$(gh api "repos/$GH_REPO/issues/$PR/comments" --paginate --jq '.[] | select(.body | startswith("<!-- pipeline:gate -->")) | .id' | tail -1)
+          body="<!-- pipeline:gate -->"$'\n'"$msg"
+          if [ -n "$id" ]; then gh api -X PATCH "repos/$GH_REPO/issues/comments/$id" -f body="$body" >/dev/null
+          else gh pr comment "$PR" --body "$body"; fi
+          [ ${#blockers[@]} -eq 0 ]

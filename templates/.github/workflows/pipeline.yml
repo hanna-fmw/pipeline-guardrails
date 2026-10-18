@@ -1,0 +1,54 @@
+# Runs on every pull request: checks, Claude bug review and Claude security review in parallel, then the gate.
+# The recipes live in hanna-fmw/pipeline-guardrails; this file only says which ones to run.
+name: pipeline
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: pipeline-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/checks.yml@main
+    permissions:
+      contents: read
+
+  review:
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/claude-review.yml@main
+    with:
+      kind: review
+      depth: standard # quick | standard | deep
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+
+  security:
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/claude-review.yml@main
+    with:
+      kind: security
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+
+  gate:
+    needs: [checks, review, security]
+    if: always()
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/gate.yml@main
+    with:
+      pr: ${{ github.event.pull_request.number }}
+      new_commits: ${{ github.event.action == 'synchronize' }}
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      checks: read

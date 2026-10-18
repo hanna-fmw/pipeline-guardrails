@@ -6,3 +6,4 @@ CLEAN-SLATE.md
 !.env.example
 node_modules/
 .DS_Store
+!templates/.claude/

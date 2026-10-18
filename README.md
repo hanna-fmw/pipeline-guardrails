@@ -1,54 +1,56 @@
 # pipeline-guardrails
 
-A modular safety + best-practice kit for the full code delivery pipeline — from "I open the editor" to "the client sees the deploy." Built for small teams that lean on AI assistants (Claude Code, Cursor, Copilot) and need the safety net that senior engineers usually carry in their heads.
+A pull-request pipeline for small teams that let AI agents write code, modelled on [how the Claude Code team does code review](https://claude.dev/blog/solving-code-review-at-anthropic/). Machines do most of the reading; a person decides what to build, reads the evidence, and approves risky changes.
 
-Each module is self-contained: a short README explaining the **practice** (what a senior dev does and why), the **automation** (the config/script/hook that enforces it), and the **maintenance** (how it stays current — rotation, updates, audits).
+## The pipeline
 
-## Modules
+| Layer | Where | What happens |
+|---|---|---|
+| Before the PR | your machine | Claude formats and lints each file it saves (`templates/.claude/settings.json`), runs the tests, and a fresh agent reviews the diff |
+| Required checks | `checks.yml` | lint, typecheck, test, build (whichever scripts exist), vulnerable packages, leaked secrets in the PR's commits |
+| Claude review | `claude-review.yml` (kind: review) | parallel bug hunters, a verifier per finding, inline comments for confirmed bugs, nits and pre-existing issues in a summary, risk label |
+| Security review | `claude-review.yml` (kind: security) | same shape, security problems only |
+| Convergence | both reviews | round 1 reads the whole PR, later rounds only new commits, never repeats a finding, resolves its own fixed threads, stops after 3 rounds |
+| Gate | `gate.yml` | one check: green checks, every thread resolved, up to date with main, owner-approved label for medium and high risk (removed on every push), CI files and CODEOWNERS paths always high |
+| Fix | `claude-fix.yml` | `@claude <what to do>` on the PR; Claude pushes the change, the pipeline runs again |
+| Rollback | `revert.yml` | `/revert` on a merged PR opens the undo PR |
+| Dependencies | `templates/.github/dependabot.yml` | weekly grouped npm updates, monthly action updates |
+
+Depth per repo: `quick`, `standard` (2 hunters, 1 verifier each) or `deep` (4 hunters, 3 voting verifiers), set in the repo's `pipeline.yml`.
+
+## Install in a repo
+
+```bash
+./install.sh <repo-folder>
+```
+
+It copies two small trigger workflows plus a PR template, `REVIEW.md`, Dependabot config and the Claude format hook, then sets the repo to squash-only merges. Existing `REVIEW.md`, PR template and Claude settings are kept. One-time setup:
+
+1. Install the [Claude GitHub App](https://github.com/apps/claude) on the repo.
+2. `claude setup-token`, then store the token once: `security add-generic-password -s claude-ci-oauth -a "$USER" -w`. The installer copies it into the repo's `CLAUDE_CODE_OAUTH_TOKEN` secret. Reviews then run on your Claude subscription, not per-token billing.
+3. Add the project's checks as package.json scripts: `lint`, `typecheck`, `test`, `build`.
+4. Fill in `REVIEW.md`: what failure looks like here, what is always high risk, what to skip.
+
+## On the GitHub free plan
+
+Private repos on the free plan cannot lock the merge button (rulesets need GitHub Pro or a public repo). Everything above still runs; the gate is a red or green check, and you merge only on green. With Pro, make `gate` a required status check, require conversation resolution, and block direct pushes to `main`.
+
+## Reference modules
 
 | # | Module | Covers |
 |---|---|---|
-| 01 | [secrets-and-env](modules/01-secrets-and-env/) | `.env` strategy, 1Password integration, key rotation, where to find keys per project |
-| 02 | [git-hygiene](modules/02-git-hygiene/) | Branch naming, commit conventions, merge strategy, protected branches |
-| 03 | [local-hooks](modules/03-local-hooks/) | Pre-commit secret/PII scan (`git-guard`), global `.gitignore`, lint-staged |
-| 04 | [ci-pipeline](modules/04-ci-pipeline/) | GitHub Actions: lint, test, secret scan, type check, build verification |
-| 05 | [pr-review](modules/05-pr-review/) | CodeRabbit setup, PR template, review checklist, required checks |
-| 06 | [claude-guardrails](modules/06-claude-guardrails/) | Claude Code hooks that block secrets/PII before they enter transcripts |
-| 07 | [deploy-safety](modules/07-deploy-safety/) | Vercel / Coolify pre-deploy gates, preview env protection, rollback drills |
-| 08 | [agent-boundaries](modules/08-agent-boundaries/) | Agent permissions, sandboxed workspaces, MCP/plugin admission policy, connected-tool audits |
+| 01 | [secrets-and-env](modules/01-secrets-and-env/) | `.env` strategy, secret-manager references, key rotation |
+| 06 | [claude-guardrails](modules/06-claude-guardrails/) | Claude Code hooks that block secrets and PII before they enter transcripts |
+| 08 | [agent-boundaries](modules/08-agent-boundaries/) | Agent permissions, sandboxed workspaces, MCP and plugin admission |
 
-## Usage
+## Keeping it working
 
-Read the module you need and copy its templates into your repo. Each module README explains what to change and in what order — nothing here is installed for you.
+Guardrails fail silently: a renamed hook field or a model that no longer needs a workaround looks fine until something gets through.
 
-Start with `01-secrets-and-env` and `06-claude-guardrails`; those are the highest-leverage.
-
-## Staying up to date
-
-Each module ends with a **Maintenance** section: what to re-check quarterly, what to rotate, which upstream tool to watch for breaking changes.
-
-Guardrails rot quietly. A hook that stopped firing, a regex that doesn't know the format of the API key you adopted last month, or a prompt tuned for a model that no longer needs the workaround all *look* fine — the file is still there, the config still parses, nothing errors. Silent failure is the normal failure mode here, so the review has to be scheduled rather than triggered.
-
-| Trigger | Re-check |
-|---------|----------|
-| **New model release** | Agent prompts, `CLAUDE.md` files, skills, and review-agent prompts. Phrasing that compensated for an older model's habits is often redundant on a newer one, and occasionally harmful — an instruction fighting a behaviour the model no longer has is wasted context at best. Verbose rules can usually be cut. Re-test one real task per prompt before trusting it. |
-| **New agent tooling release** | Hook event names, JSON input and output fields, settings schema, permission-rule syntax. These are the parts that break silently: a renamed field means your hook returns something the harness ignores. Re-read the hooks and settings reference, then verify each hook actually fires. |
-| **Adopting any new service** | Add its credential format to the secret regex sets (modules 04 and 06) the same day, not at the next quarterly review. |
-| **Quarterly** | Deny lists and permission rules (capability grows quietly), CODEOWNERS, connected MCP servers and plugins, and contradictions between `CLAUDE.md` files, `.claude/rules/`, and skills. |
-| **After any incident or near miss** | The rule that would have caught it. A guardrail added after the fact is the only kind that's been tested against something real. |
-
-The strongest habit: verify hooks are still *firing*, not just still present. A hook that silently stopped running looks identical to one that never had anything to catch.
-
-## Status
-
-Reference-first and in progress. All eight modules are written and their templates are usable as-is by copying them.
-
-The configuration and hook templates have been reviewed against the current official documentation, and the shell templates were executed to confirm they do what their README claims — a scrubber that silently redacts nothing, or a hook that stops firing after a field rename, is the characteristic failure here and does not announce itself. The workflow and deploy templates are unverified end-to-end: nothing in this repo deploys anywhere, so those can only be proven in a project that adopts them.
-
-Planned next: a `cli/` package providing `pipeline-guardrails init`, which drops the relevant configs into a repo and verifies the prerequisites (git-guard installed, 1Password CLI present, gitleaks available), and `update`, which diffs an existing repo against the latest templates. Not implemented yet — copy the templates manually until it lands.
-
-Examples use a fictional `acme-` org and generic placeholders; substitute your own.
+- **New model or Claude Code release:** re-run one real PR through the pipeline and check that the reviews still post.
+- **A bug got through:** ask which layer should have caught it, then add a line to that repo's `REVIEW.md`, a lint rule, or a check here.
+- **A finding keeps coming back:** fix it at the source (`REVIEW.md`, `CLAUDE.md`, a lint rule), not per PR.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).

@@ -1,0 +1,37 @@
+# "/revert" in a comment on a merged PR: opens a PR that undoes it. You merge that PR.
+name: revert
+on:
+  workflow_call:
+    inputs:
+      pr:
+        type: number
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  revert:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR: ${{ inputs.pr }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Open the revert PR
+        run: |
+          sha=$(gh pr view "$PR" --json mergeCommit,state --jq 'select(.state == "MERGED") | .mergeCommit.oid')
+          [ -n "$sha" ] || { gh pr comment "$PR" --body "Can't revert: this PR is not merged."; exit 1; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          branch="revert-pr-$PR"
+          git switch -c "$branch"
+          git revert --no-edit "$sha"
+          git push origin "$branch"
+          url=$(gh pr create --base "$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)" --head "$branch" \
+            --title "revert: #$PR" --label risk:low \
+            --body "Undoes #$PR (commit $sha). Opened by /revert. Merge it to roll back.")
+          gh pr comment "$PR" --body "Revert PR ready: $url"

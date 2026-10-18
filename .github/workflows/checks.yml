@@ -1,0 +1,63 @@
+# Required checks: lint, types, tests, build, leaked secrets, vulnerable packages.
+# Runs whichever of the package.json scripts lint / typecheck / test / build exist.
+name: checks
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Detect package manager
+        id: pm
+        run: |
+          if [ -f pnpm-lock.yaml ]; then echo "pm=pnpm" >> "$GITHUB_OUTPUT"
+          elif [ -f package.json ]; then echo "pm=npm" >> "$GITHUB_OUTPUT"
+          else echo "pm=none" >> "$GITHUB_OUTPUT"; fi
+
+      - if: steps.pm.outputs.pm == 'pnpm'
+        uses: pnpm/action-setup@v6
+      - if: steps.pm.outputs.pm != 'none'
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: ${{ steps.pm.outputs.pm }}
+
+      - name: Install
+        if: steps.pm.outputs.pm != 'none'
+        run: |
+          if [ "${{ steps.pm.outputs.pm }}" = pnpm ]; then pnpm install --frozen-lockfile
+          else npm ci; fi
+
+      - name: Lint, types, tests, build
+        if: steps.pm.outputs.pm != 'none'
+        run: |
+          for s in lint typecheck test build; do
+            if jq -e --arg s "$s" '.scripts[$s]' package.json >/dev/null; then
+              echo "::group::$s"; ${{ steps.pm.outputs.pm }} run "$s"; echo "::endgroup::"
+            else
+              echo "No '$s' script, skipped."
+            fi
+          done
+
+      - name: Vulnerable packages (high and critical, production only)
+        if: steps.pm.outputs.pm != 'none'
+        run: |
+          if [ "${{ steps.pm.outputs.pm }}" = pnpm ]; then pnpm audit --prod --audit-level high
+          else npm audit --omit=dev --audit-level=high; fi
+
+      - name: Leaked secrets in this PR's commits
+        if: github.event_name == 'pull_request'
+        env:
+          GITLEAKS_VERSION: 8.30.1
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar -xz gitleaks
+          ./gitleaks git --redact --no-banner --log-opts="${BASE}..HEAD" .
