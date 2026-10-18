@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Put the pipeline into a repo: install.sh <repo-folder>
 # Copies the templates (never overwrites your own REVIEW.md, PR template or Claude settings),
-# sets the GitHub repo to squash-only merges, and sets the Claude token secret from the macOS Keychain.
+# sets the GitHub repo to squash-only merges, and sets the Claude token secret from Infisical.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")" && pwd)/templates"
 repo="$(cd "${1:?usage: install.sh <repo-folder>}" && pwd)"
@@ -24,12 +24,14 @@ gh api -X PUT "repos/$slug/actions/permissions/workflow" \
   -f default_workflow_permissions=read -F can_approve_pull_request_reviews=true >/dev/null
 echo "set     squash-only merges, branch cleanup, Actions may open PRs (for /revert)"
 
-if security find-generic-password -s claude-ci-oauth >/dev/null 2>&1; then
-  security find-generic-password -s claude-ci-oauth -w | gh secret set CLAUDE_CODE_OAUTH_TOKEN -R "$slug"
-  echo "set     CLAUDE_CODE_OAUTH_TOKEN secret (from Keychain item claude-ci-oauth)"
+# Master copy: Infisical, project "personal", env dev, folder /github
+token() { infisical secrets get CLAUDE_CODE_OAUTH_TOKEN --projectId f45535b0-69ef-422f-a292-9cfefd4bdbc1 \
+  --env dev --path /github --plain --silent 2>/dev/null | tr -d '\n'; }
+if [ -n "$(token | head -c1)" ]; then
+  token | gh secret set CLAUDE_CODE_OAUTH_TOKEN -R "$slug"
+  echo "set     CLAUDE_CODE_OAUTH_TOKEN secret (from Infisical personal /github)"
 else
-  echo "TODO    Claude token: run 'claude setup-token', then store it once with:"
-  echo "        security add-generic-password -s claude-ci-oauth -a \"\$USER\" -w"
-  echo "        and run this script again."
+  echo "TODO    Claude token: run 'claude setup-token' and save it in Infisical project personal,"
+  echo "        env dev, folder /github, as CLAUDE_CODE_OAUTH_TOKEN; then run this script again."
 fi
 echo "TODO    Claude GitHub App must have access to $slug: https://github.com/apps/claude"

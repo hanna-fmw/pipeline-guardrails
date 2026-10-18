@@ -27,7 +27,7 @@ Depth per repo: `quick`, `standard` (2 hunters, 1 verifier each) or `deep` (4 hu
 It copies two small trigger workflows plus a PR template, `REVIEW.md`, Dependabot config and the Claude format hook, then sets the repo to squash-only merges. Existing `REVIEW.md`, PR template and Claude settings are kept. One-time setup:
 
 1. Install the [Claude GitHub App](https://github.com/apps/claude) on the repo.
-2. `claude setup-token`, then store the token once: `security add-generic-password -s claude-ci-oauth -a "$USER" -w`. The installer copies it into the repo's `CLAUDE_CODE_OAUTH_TOKEN` secret. Reviews then run on your Claude subscription, not per-token billing.
+2. `claude setup-token`, then save the token once in Infisical (project `personal`, env `dev`, folder `/github`, name `CLAUDE_CODE_OAUTH_TOKEN`). The installer copies it into the repo's secret without showing it. Reviews then run on your Claude subscription, not per-token billing.
 3. Add the project's checks as package.json scripts: `lint`, `typecheck`, `test`, `build`.
 4. Fill in `REVIEW.md`: what failure looks like here, what is always high risk, what to skip.
 
