@@ -6,7 +6,8 @@
 #     which is removed on every new push, so an approval covers one commit only
 #   - CI files and paths listed in CODEOWNERS always count as high
 #   - a green low-risk PR (docs/tests only, Claude agrees) merges itself unless auto_merge is false
-#   - Slack (optional SLACK_BOT_TOKEN secret): one message in #pull-requests when a PR waits for the owner, or merged itself
+#   - Slack (optional SLACK_BOT_TOKEN secret): one message per PR in #pull-requests, edited as the PR moves
+#     (needs you -> ready -> merged/closed), so finished PRs never sit there looking open
 # On free private repos GitHub cannot lock the merge button: merge only when this check is green.
 name: gate
 on:
@@ -53,7 +54,30 @@ jobs:
           fi
 
           pr=$(gh pr view "$PR" --json state,headRefOid,labels,mergeStateStatus,files,author,title,url)
-          [ "$(jq -r .state <<<"$pr")" = OPEN ] || { echo "PR is not open."; exit 0; }
+          old=$(gh api "repos/$GH_REPO/issues/$PR/comments" --paginate --jq '[.[] | select(.body | startswith("<!-- pipeline:gate -->"))] | last // {} | {id, body}')
+          id=$(jq -r '.id // ""' <<<"$old")
+          sref=$(jq -r '.body // ""' <<<"$old" | grep -o 'slack=[A-Z0-9]*:[0-9.]*' | head -1 | cut -d= -f2 || true)
+          # This PR's one Slack message: edited if it exists, else posted and remembered in the gate comment
+          slack() {
+            [ -n "$SLACK_TOKEN" ] || return 0
+            local text api data res
+            about=$(gh repo view "$GH_REPO" --json description --jq '.description // ""')
+            text="*${GH_REPO#*/}*${about:+ ($about)}"$'\n'"$1: PR #$PR \"$(jq -r .title <<<"$pr")\""$'\n'"$(jq -r .url <<<"$pr")"
+            if [ -n "$sref" ]; then api=chat.update
+              data=$(jq -n --arg c "${sref%%:*}" --arg ts "${sref#*:}" --arg t "$text" '{channel: $c, ts: $ts, text: $t}')
+            else api=chat.postMessage
+              data=$(jq -n --arg c "${{ inputs.slack_channel }}" --arg t "$text" '{channel: $c, text: $t}')
+            fi
+            res=$(printf 'header = "Authorization: Bearer %s"\n' "$SLACK_TOKEN" | curl -sS -K - \
+              -H 'Content-Type: application/json; charset=utf-8' --data "$data" "https://slack.com/api/$api" || true)
+            echo "Slack ($api): $(jq -r 'if .ok then "ok" else "failed: \(.error)" end' <<<"$res" 2>/dev/null || echo "failed: no reply")"
+            [ -n "$sref" ] || sref=$(jq -r 'if .ok then "\(.channel):\(.ts)" else "" end' <<<"$res" 2>/dev/null || true)
+          }
+          case "$(jq -r .state <<<"$pr")" in
+            OPEN) ;;
+            MERGED) [ -z "$sref" ] || slack "✅ merged"; exit 0 ;;
+            *) [ -z "$sref" ] || slack "closed without merging"; exit 0 ;;
+          esac
           head=$(jq -r .headRefOid <<<"$pr")
           labels=$(jq -r '.labels[].name' <<<"$pr")
           author=$(jq -r .author.login <<<"$pr")
@@ -139,25 +163,18 @@ jobs:
             msg="**Merge gate: blocked** · risk $risk"$'\n\n'"$(printf -- '- [ ] %s\n' "${blockers[@]}")"
           fi
           echo "$msg" >> "$GITHUB_STEP_SUMMARY"
-          old=$(gh api "repos/$GH_REPO/issues/$PR/comments" --paginate --jq '[.[] | select(.body | startswith("<!-- pipeline:gate -->"))] | last // {} | {id, body}')
-          id=$(jq -r '.id // ""' <<<"$old")
-          body="<!-- pipeline:gate -->"$'\n'"$msg"
-
-          # Slack only when the owner is needed (or a PR merged itself), and only when the verdict changed
+          # Slack: post when the owner is needed; after that, keep editing the same message
           case $state in
-            merged) note="merged automatically (low risk)" ;;
-            ready) note="is ready to merge" ;;
-            *) [ ${#blockers[@]} -eq 1 ] && [ "${waiting_for_owner:-}" = true ] && note="needs your approval (risk $risk)" ;;
+            merged) note="✅ merged automatically (low risk)" ;;
+            ready) note="ready to merge" ;;
+            *) note=$([ ${#blockers[@]} -eq 1 ] && [ "${waiting_for_owner:-}" = true ] && echo "needs your approval (risk $risk)" || echo "") ;;
           esac
-          if [ -n "${note:-}" ] && [ -n "$SLACK_TOKEN" ] && [ "$(jq -r '.body // ""' <<<"$old")" != "$body" ]; then
-            about=$(gh repo view "$GH_REPO" --json description --jq '.description // ""')
-            text="*${GH_REPO#*/}*${about:+ ($about)}"$'\n'"PR #$PR \"$(jq -r .title <<<"$pr")\" $note"$'\n'"$(jq -r .url <<<"$pr")"
-            res=$(printf 'header = "Authorization: Bearer %s"\n' "$SLACK_TOKEN" | curl -sS -K - \
-              -H 'Content-Type: application/json; charset=utf-8' \
-              --data "$(jq -n --arg c "${{ inputs.slack_channel }}" --arg t "$text" '{channel: $c, text: $t}')" \
-              https://slack.com/api/chat.postMessage || true)
-            echo "Slack: $(jq -r 'if .ok then "posted" else "failed: \(.error)" end' <<<"$res" 2>/dev/null || echo "failed: no reply")"
+          prev=$(jq -r '.body // ""' <<<"$old" | sed 1,2d)
+          if [ "$prev" != "$msg" ]; then
+            if [ -n "$note" ]; then slack "$note"
+            elif [ -n "$sref" ]; then slack "not ready yet"; fi
           fi
+          body="<!-- pipeline:gate -->"$'\n'"<!-- slack=${sref:-} -->"$'\n'"$msg"
           if [ -n "$id" ]; then gh api -X PATCH "repos/$GH_REPO/issues/comments/$id" -f body="$body" >/dev/null
           else gh pr comment "$PR" --body "$body"; fi
           [ ${#blockers[@]} -eq 0 ]

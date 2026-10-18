@@ -3,7 +3,7 @@
 #                          in an issue (or a new issue's text): Claude does it and opens a PR
 #   /gate                  re-check the gate, e.g. after resolving threads
 #   /revert                on a merged PR: opens a PR that undoes it
-# Adding the owner-approved label also re-checks the gate.
+# Adding the owner-approved label also re-checks the gate; merging or closing a PR updates its Slack message.
 name: commands
 on:
   issue_comment:
@@ -11,7 +11,7 @@ on:
   pull_request_review_comment:
     types: [created]
   pull_request:
-    types: [labeled]
+    types: [labeled, closed]
   issues:
     types: [opened]
 
@@ -33,7 +33,7 @@ jobs:
 
   gate:
     if: >-
-      (github.event_name == 'pull_request' && github.event.label.name == 'owner-approved')
+      (github.event_name == 'pull_request' && (github.event.action == 'closed' || github.event.label.name == 'owner-approved'))
       || (github.event_name == 'issue_comment' && github.event.issue.pull_request
           && startsWith(github.event.comment.body, '/gate') && github.event.comment.author_association == 'OWNER')
     uses: hanna-fmw/pipeline-guardrails/.github/workflows/gate.yml@main
