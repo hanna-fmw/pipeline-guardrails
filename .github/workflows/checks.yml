@@ -1,4 +1,4 @@
-# Required checks: lint, types, tests, build, leaked secrets, vulnerable packages.
+# Required checks: lint, types, tests, build, workflow and shell lint, leaked secrets, vulnerable packages.
 # Runs whichever of the package.json scripts lint / typecheck / test / build exist.
 name: checks
 on:
@@ -47,6 +47,15 @@ jobs:
               echo "No '$s' script, skipped."
             fi
           done
+
+      - name: Workflow and shell script lint
+        run: |
+          if compgen -G ".github/workflows/*.y*ml" >/dev/null; then
+            bash <(curl -sSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12 >/dev/null
+            ./actionlint -color
+          fi
+          mapfile -t sh < <(git ls-files '*.sh')
+          [ ${#sh[@]} -eq 0 ] || shellcheck "${sh[@]}"
 
       - name: Vulnerable packages (high and critical, production only)
         if: steps.pm.outputs.pm != 'none'

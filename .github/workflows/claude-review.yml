@@ -112,7 +112,8 @@ jobs:
 
           $risk
 
-          Return structured output. "important" is the number of findings you posted inline this round. "summary" starts with that count, and says plainly "Nothing to fix." when it is 0.
+          Return structured output. "important" is the number of findings you posted inline this round. "summary" starts with that count, and says plainly "Nothing to fix." when it is 0.$([ "$KIND" = review ] && echo '
+          "explain" is for an owner who is not a senior developer and must decide whether to merge: 3 to 6 short bullets in plain English on what this change does for the people using the app, what could break, and what to try by hand before approving. No jargon; name a file only when it helps.')
           EOF
             echo 'PROMPT_END'
           } >> "$GITHUB_OUTPUT"
@@ -126,7 +127,7 @@ jobs:
           prompt: ${{ steps.prep.outputs.prompt }}
           claude_args: |
             --allowedTools "Read,Grep,Glob,Task,Agent,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),mcp__github_inline_comment__create_inline_comment"
-            --json-schema '{"type":"object","properties":{"important":{"type":"integer"},"nits":{"type":"array","items":{"type":"string"}},"pre_existing":{"type":"array","items":{"type":"string"}},"risk":{"type":"string","enum":["low","medium","high"]},"risk_reason":{"type":"string"},"fixed_threads":{"type":"array","items":{"type":"string"}},"summary":{"type":"string"}},"required":["important","risk","summary"]}'
+            --json-schema '{"type":"object","properties":{"important":{"type":"integer"},"nits":{"type":"array","items":{"type":"string"}},"pre_existing":{"type":"array","items":{"type":"string"}},"risk":{"type":"string","enum":["low","medium","high"]},"risk_reason":{"type":"string"},"explain":{"type":"string"},"fixed_threads":{"type":"array","items":{"type":"string"}},"summary":{"type":"string"}},"required":["important","risk","summary"]}'
 
       - name: Post the round summary and risk label
         if: steps.prep.outputs.skip != 'true'
@@ -137,7 +138,8 @@ jobs:
         run: |
           OUT=$(jq 'walk(if type == "string" then gsub("<!--"; "&lt;!--") else . end)' <<<"$OUT")
           body=$(jq -r --arg k "$KIND" --arg sha "$HEAD_SHA" --arg r "$ROUND" --arg m "$MAX" '
-            "<!-- pipeline:\($k) sha=\($sha) risk=\(.risk) -->\n### Claude \($k) · round \($r) of \($m)\n\n\(.summary)"
+            "<!-- pipeline:\($k) sha=\($sha) risk=\(.risk) -->\n### Claude \($k) · round \($r) of \($m)\n\n"
+            + (if .explain then "**In plain English**\n\(.explain)\n\n" else "" end) + .summary
             + (if $k == "review" then "\n\n**Risk:** \(.risk)\(if .risk_reason then " — \(.risk_reason)" else "" end)" else "" end)
             + (if (.nits // []) | length > 0 then "\n\n**Nits** (not blocking)\n" + ((.nits) | map("- " + .) | join("\n")) else "" end)
             + (if (.pre_existing // []) | length > 0 then "\n\n**Pre-existing** (not caused by this PR)\n" + ((.pre_existing) | map("- " + .) | join("\n")) else "" end)
