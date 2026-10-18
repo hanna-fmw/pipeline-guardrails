@@ -92,7 +92,7 @@ jobs:
           {
             echo 'prompt<<PROMPT_END'
             cat <<EOF
-          You are the automated $KIND reviewer for pull request #$PR in $REPO. The PR branch is checked out. This is round $round of at most $MAX.
+          You are the automated $([ "$KIND" = security ] && echo security || echo code) reviewer for pull request #$PR in $REPO. The PR branch is checked out. This is round $round of at most $MAX.
 
           Scope: $scope
 
