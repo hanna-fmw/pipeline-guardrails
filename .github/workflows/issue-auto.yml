@@ -116,7 +116,8 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
-            --allowedTools "Edit,Write,Read,Glob,Grep,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git switch -c:*),Bash(git checkout -b:*),Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(gh pr create:*)"
+            --allowedTools "Edit,Write,Read,Glob,Grep,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git switch -c:*),Bash(git checkout -b:*),Bash(git add:*),Bash(git commit:*),Bash(git push origin ai/issue-${{ matrix.issue }}),Bash(git push -u origin ai/issue-${{ matrix.issue }}),Bash(gh pr create:*)"
+            --disallowedTools "Edit(.git/**),Write(.git/**),Edit(.github/**),Write(.github/**),Bash(git commit --no-verify:*),Bash(git log --output:*),Bash(git diff --output:*)"
           prompt: |
             Do issue #${{ matrix.issue }} in this repo. The task, exactly as the owner approved it:
 
