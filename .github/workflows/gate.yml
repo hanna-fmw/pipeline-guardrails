@@ -91,10 +91,10 @@ jobs:
           # 1. Checks on the latest commit (the gate itself excluded; latest run per check name wins)
           runs=$(gh api "repos/$GH_REPO/commits/$head/check-runs?per_page=100" --jq '
             [.check_runs[] | select(.name | test("gate") | not)]
-            | group_by(.name) | map(max_by(.started_at))')
+            | group_by(.name) | map(max_by(.started_at))') || { echo "::error::Could not read the checks on $head"; exit 1; }
           pending=$(jq '[.[] | select(.status != "completed")] | length' <<<"$runs")
           failed=$(jq -r '[.[] | select(.status == "completed" and (.conclusion | IN("success","skipped","neutral") | not)) | .name] | join(", ")' <<<"$runs")
-          [ "$pending" -eq 0 ] || blockers+=("Checks still running; the gate re-runs when they finish.")
+          [ "$pending" -eq 0 ] || blockers+=("Checks still running. Comment \`/gate\` when they finish.")
           [ "$(jq length <<<"$runs")" -gt 0 ] || blockers+=("No checks have run on the latest commit yet.")
           [ -z "$failed" ] || blockers+=("Failing checks: $failed (see the **Checks** tab).")
 
@@ -172,7 +172,8 @@ jobs:
           case $state in
             merged) note="🟢 MERGED:" ;;
             ready) note="🟡 PR:" ;;
-            *) note=$([ ${#blockers[@]} -eq 1 ] && [ "${waiting_for_owner:-}" = true ] && echo "🟡 PR:" || echo "") ;;
+            # Owner needed and nothing failing: ping now, even while a slow check (e.g. Vercel) still runs
+            *) note=$([ "${waiting_for_owner:-}" = true ] && [ -z "$failed" ] && echo "🟡 PR:" || echo "") ;;
           esac
           prev=$(jq -r '.body // ""' <<<"$old" | sed 1,2d)
           if [ "$prev" != "$msg" ]; then
