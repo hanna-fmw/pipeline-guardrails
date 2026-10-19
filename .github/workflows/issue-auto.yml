@@ -62,10 +62,16 @@ jobs:
           # Open ai:auto issues that nobody is working on and that have a pin, oldest first
           waiting=$(gh issue list --state open --label ai:auto --limit 50 --json number,labels \
             --jq '[.[] | select([.labels[].name] | index("ai:working") | not) | .number] | sort | .[]')
+          # ...and whose latest ai:auto label came from the owner, with a pin made after it
           list=()
           for n in $waiting; do
+            lab=$(gh api "repos/$GH_REPO/issues/$n/events" --paginate \
+              --jq '.[] | select(.event == "labeled" and .label.name == "ai:auto") | "\(.actor.login) \(.created_at)"' | tail -1)
+            t="${lab#* }"
+            [ "${lab% *}" = "${{ inputs.owner }}" ] && [[ "$t" =~ ^[0-9T:Z-]+$ ]] || continue
             gh api "repos/$GH_REPO/issues/$n/comments" --paginate \
-              --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- ai:auto-pin "))) | .id' | grep -q . && list+=("$n")
+              --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"<!-- ai:auto-pin \")) and .created_at >= \"$t\") | .id" \
+              | grep -q . && list+=("$n")
           done
           echo "issues=$(printf '%s\n' "${list[@]}" | jq -Rsc 'split("\n") | map(select(length > 0) | tonumber)')" >> "$GITHUB_OUTPUT"
           echo "Waiting: ${list[*]:-none}"
@@ -94,7 +100,9 @@ jobs:
           pin=$(gh api "repos/$GH_REPO/issues/$ISSUE/comments" --paginate \
             --jq '.[] | select(.user.login == "github-actions[bot]") | .body | capture("^<!-- ai:auto-pin (?<b>[A-Za-z0-9+/=]+) -->") | .b' | tail -1)
           base64 -d <<<"$pin" | jq -r '"# \(.title)\n\n\(.body)"' > "$RUNNER_TEMP/task.md"
-          { echo "text<<PIN_EOF_7f3a"; cat "$RUNNER_TEMP/task.md"; echo; echo "PIN_EOF_7f3a"; } >> "$GITHUB_OUTPUT"
+          # Random end marker, so the issue text cannot close the output early and set other outputs
+          eof="EOF_$(openssl rand -hex 16)"
+          { echo "text<<$eof"; cat "$RUNNER_TEMP/task.md"; echo; echo "$eof"; } >> "$GITHUB_OUTPUT"
 
       - if: steps.task.outputs.skip != 'true'
         uses: actions/checkout@v7
@@ -108,7 +116,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
-            --allowedTools "Edit,Write,Read,Glob,Grep,Bash(git:*),Bash(gh pr create:*)"
+            --allowedTools "Edit,Write,Read,Glob,Grep,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git switch -c:*),Bash(git checkout -b:*),Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(gh pr create:*)"
           prompt: |
             Do issue #${{ matrix.issue }} in this repo. The task, exactly as the owner approved it:
 
