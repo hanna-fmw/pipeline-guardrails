@@ -80,7 +80,7 @@ jobs:
           }
           # A merge made by this workflow's token does not close "Closes #N" issues, so close them here
           close_linked() {
-            for n in $(gh pr view "$PR" --json closingIssuesReferences --jq '.closingIssuesReferences[].number'); do
+            for n in $(gh pr view "$PR" --json closingIssuesReferences --jq '.closingIssuesReferences[] | select(.repository.nameWithOwner == env.GH_REPO) | .number'); do
               gh issue close "$n" --reason completed --comment "Done in #$PR." >/dev/null 2>&1 || true
               gh issue edit "$n" --remove-label ai:working >/dev/null 2>&1 || true
             done
