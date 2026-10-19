@@ -6,7 +6,8 @@
 #     which is removed on every new push, so an approval covers one commit only
 #   - CI files and paths listed in CODEOWNERS always count as high
 #   - a green low-risk PR (docs/tests only, Claude agrees) merges itself unless auto_merge is false
-#   - Slack (optional SLACK_BOT_TOKEN secret): one message per PR in #pull-requests, edited as the PR moves
+#   - Slack (optional SLACK_BOT_TOKEN secret): one message per PR in #pull-requests, edited as the PR moves.
+#     Same dots as every Slack post (Hanna 2026-10-19): 🔴 act now, 🟡 look when you can, 🟢 nothing to do, ⚪ closed.
 #     (needs you -> ready -> merged/closed), so finished PRs never sit there looking open
 # On free private repos GitHub cannot lock the merge button: merge only when this check is green.
 name: gate
@@ -79,8 +80,8 @@ jobs:
           }
           case "$(jq -r .state <<<"$pr")" in
             OPEN) ;;
-            MERGED) [ -z "$sref" ] || slack "✅"; exit 0 ;;
-            *) [ -z "$sref" ] || slack "✖️ closed:"; exit 0 ;;
+            MERGED) [ -z "$sref" ] || slack "🟢 MERGED:"; exit 0 ;;
+            *) [ -z "$sref" ] || slack "⚪ CLOSED:"; exit 0 ;;
           esac
           head=$(jq -r .headRefOid <<<"$pr")
           labels=$(jq -r '.labels[].name' <<<"$pr")
@@ -169,14 +170,14 @@ jobs:
           echo "$msg" >> "$GITHUB_STEP_SUMMARY"
           # Slack: post when the owner is needed; after that, keep editing the same message
           case $state in
-            merged) note="✅" ;;
-            ready) note=post ;;
-            *) note=$([ ${#blockers[@]} -eq 1 ] && [ "${waiting_for_owner:-}" = true ] && echo post || echo "") ;;
+            merged) note="🟢 MERGED:" ;;
+            ready) note="🟡 PR:" ;;
+            *) note=$([ ${#blockers[@]} -eq 1 ] && [ "${waiting_for_owner:-}" = true ] && echo "🟡 PR:" || echo "") ;;
           esac
           prev=$(jq -r '.body // ""' <<<"$old" | sed 1,2d)
           if [ "$prev" != "$msg" ]; then
-            if [ -n "$note" ]; then slack "${note#post}"
-            elif [ -n "$sref" ]; then slack ""; fi
+            if [ -n "$note" ]; then slack "$note"
+            elif [ -n "$sref" ]; then slack "🟡 PR:"; fi
           fi
           body="<!-- pipeline:gate -->"$'\n'"<!-- slack=${sref:-} -->"$'\n'"$msg"
           if [ -n "$id" ]; then gh api -X PATCH "repos/$GH_REPO/issues/comments/$id" -f body="$body" >/dev/null
