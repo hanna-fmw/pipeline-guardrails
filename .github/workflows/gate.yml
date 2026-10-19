@@ -78,9 +78,16 @@ jobs:
             echo "Slack ($api): $(jq -r 'if .ok then "ok" else "failed: \(.error)" end' <<<"$res" 2>/dev/null || echo "failed: no reply")"
             [ -n "$sref" ] || sref=$(jq -r 'if .ok then "\(.channel):\(.ts)" else "" end' <<<"$res" 2>/dev/null || true)
           }
+          # A merge made by this workflow's token does not close "Closes #N" issues, so close them here
+          close_linked() {
+            for n in $(gh pr view "$PR" --json closingIssuesReferences --jq '.closingIssuesReferences[].number'); do
+              gh issue close "$n" --reason completed --comment "Done in #$PR." >/dev/null 2>&1 || true
+              gh issue edit "$n" --remove-label ai:working >/dev/null 2>&1 || true
+            done
+          }
           case "$(jq -r .state <<<"$pr")" in
             OPEN) ;;
-            MERGED) [ -z "$sref" ] || slack "🟢 MERGED:"; exit 0 ;;
+            MERGED) close_linked; [ -z "$sref" ] || slack "🟢 MERGED:"; exit 0 ;;
             *) [ -z "$sref" ] || slack "⚪ CLOSED:"; exit 0 ;;
           esac
           head=$(jq -r .headRefOid <<<"$pr")
@@ -159,6 +166,7 @@ jobs:
           if [ ${#blockers[@]} -eq 0 ] && [ "$risk" = low ] && [ "${{ inputs.auto_merge }}" = true ] \
              && [ "$author" != "app/dependabot" ] && gh pr merge "$PR" --squash --match-head-commit "$head"; then
             state=merged
+            close_linked
             msg="**Merge gate: merged** · risk low"$'\n\n'"All checks passed and all threads are resolved. Low-risk change, merged automatically. Comment \`/revert\` to undo."
           elif [ ${#blockers[@]} -eq 0 ]; then
             state=ready
