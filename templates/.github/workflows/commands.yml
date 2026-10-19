@@ -3,6 +3,7 @@
 #                          in an issue (or a new issue's text): Claude does it and opens a PR
 #   /gate                  re-check the gate, e.g. after resolving threads
 #   /revert                on a merged PR: opens a PR that undoes it
+# The ai:auto label on an issue (yours only): Claude does it alone and opens a PR, one issue at a time.
 # Adding the owner-approved label also re-checks the gate; merging or closing a PR updates its Slack message.
 name: commands
 on:
@@ -13,14 +14,14 @@ on:
   pull_request:
     types: [labeled, closed]
   issues:
-    types: [opened]
+    types: [opened, labeled]
 
 jobs:
   fix:
     if: >-
       ((github.event_name == 'pull_request_review_comment' || github.event_name == 'issue_comment')
         && contains(github.event.comment.body, '@claude') && github.event.comment.author_association != 'NONE')
-      || (github.event_name == 'issues'
+      || (github.event_name == 'issues' && github.event.action == 'opened'
         && contains(github.event.issue.body, '@claude') && github.event.issue.author_association != 'NONE')
     uses: hanna-fmw/pipeline-guardrails/.github/workflows/claude-fix.yml@main
     secrets:
@@ -46,6 +47,34 @@ jobs:
       pull-requests: write
       issues: write
       checks: read
+
+  auto-pin:
+    if: github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'ai:auto'
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/issue-auto.yml@main
+    with:
+      mode: pin
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+
+  auto-run:
+    needs: auto-pin
+    concurrency: # one issue per repo at a time; later ones wait, never cancel
+      group: ai-auto
+      cancel-in-progress: false
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/issue-auto.yml@main
+    with:
+      mode: run
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
 
   revert:
     if: >-

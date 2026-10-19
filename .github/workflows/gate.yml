@@ -173,7 +173,8 @@ jobs:
             merged) note="🟢 MERGED:" ;;
             ready) note="🟡 PR:" ;;
             # Owner needed and nothing failing: ping now, even while a slow check (e.g. Vercel) still runs
-            *) note=$([ "${waiting_for_owner:-}" = true ] && [ -z "$failed" ] && echo "🟡 PR:" || echo "") ;;
+            # Failing checks: red, so a broken agent PR never sits unseen
+            *) note=$([ -n "$failed" ] && echo "🔴 FAILING:" || { [ "${waiting_for_owner:-}" = true ] && echo "🟡 PR:"; } || echo "") ;;
           esac
           prev=$(jq -r '.body // ""' <<<"$old" | sed 1,2d)
           if [ "$prev" != "$msg" ]; then
