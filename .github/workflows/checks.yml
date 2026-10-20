@@ -62,7 +62,7 @@ jobs:
             ./actionlint -color
           fi
           mapfile -t sh < <(git ls-files '*.sh')
-          [ ${#sh[@]} -eq 0 ] || shellcheck -S warning "${sh[@]}" # real problems only, not style notes
+          [ ${#sh[@]} -eq 0 ] || shellcheck -e SC2016 "${sh[@]}" # SC2016: '$x' in single quotes is usually meant (GraphQL, jq)
 
       - name: Vulnerable packages (high and critical, production only)
         if: steps.pm.outputs.pm != 'none'
