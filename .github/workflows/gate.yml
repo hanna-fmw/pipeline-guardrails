@@ -5,7 +5,7 @@
 #   - risk:low is fine on green; medium and high also need the owner-approved label,
 #     which is removed on every new push, so an approval covers one commit only
 #   - CI files and paths listed in CODEOWNERS always count as high
-#   - a green low-risk PR (docs/tests only, Claude agrees) merges itself unless auto_merge is false
+#   - a green PR merges itself when low-risk (docs/tests only, Claude agrees) or owner-approved, unless auto_merge is false
 #   - Slack (optional SLACK_BOT_TOKEN secret): one message per PR in #pull-requests, edited as the PR moves.
 #     Same dots as every Slack post (Hanna 2026-10-19): 🔴 act now, 🟡 look when you can, 🟢 nothing to do, ⚪ closed.
 #     (needs you -> ready -> merged/closed), so finished PRs never sit there looking open
@@ -31,7 +31,7 @@ on:
         required: false
 
 permissions:
-  contents: write # only used to merge green low-risk PRs
+  contents: write # only used to merge green low-risk or owner-approved PRs
   pull-requests: write
   issues: write
   checks: read
@@ -163,14 +163,16 @@ jobs:
           fi
 
           # One sticky comment with the verdict
-          if [ ${#blockers[@]} -eq 0 ] && [ "$risk" = low ] && [ "${{ inputs.auto_merge }}" = true ] \
-             && [ "$author" != "app/dependabot" ] && gh pr merge "$PR" --squash --match-head-commit "$head"; then
+          # Green and (low risk, or owner approved): merge. GitHub refuses this token on PRs that change workflow files.
+          can_merge=$( { [ "$risk" = low ] && [ "$author" != "app/dependabot" ]; } || [ "$approved" = true ] && echo true || echo false)
+          if [ ${#blockers[@]} -eq 0 ] && [ "$can_merge" = true ] && [ "${{ inputs.auto_merge }}" = true ] \
+             && gh pr merge "$PR" --squash --match-head-commit "$head"; then
             state=merged
             close_linked
-            msg="**Merge gate: merged** · risk low"$'\n\n'"All checks passed and all threads are resolved. Low-risk change, merged automatically. Comment \`/revert\` to undo."
+            msg="**Merge gate: merged** · risk $risk"$'\n\n'"All checks passed and all threads are resolved$([ "$approved" = true ] && echo "; owner approved"). Merged automatically. Comment \`/revert\` to undo."
           elif [ ${#blockers[@]} -eq 0 ]; then
             state=ready
-            msg="**Merge gate: ready** · risk $risk"$'\n\n'"All checks passed and all threads are resolved$([ "$approved" = true ] && echo "; owner approved"). Ready to squash and merge."
+            msg="**Merge gate: ready** · risk $risk"$'\n\n'"All checks passed and all threads are resolved$([ "$approved" = true ] && echo "; owner approved"). Ready to squash and merge$([ "$can_merge" = true ] && echo " (it could not merge itself, likely a workflow file: press **Squash and merge**)")."
           else
             state=blocked
             msg="**Merge gate: blocked** · risk $risk"$'\n\n'"$(printf -- '- [ ] %s\n' "${blockers[@]}")"
