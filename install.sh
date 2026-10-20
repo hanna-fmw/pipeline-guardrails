@@ -20,9 +20,14 @@ git add -f .claude/settings.json # global gitignores often hide .claude/; this f
 
 gh repo edit "$slug" --enable-squash-merge --enable-merge-commit=false --enable-rebase-merge=false \
   --delete-branch-on-merge >/dev/null
-gh api -X PUT "repos/$slug/actions/permissions/workflow" \
-  -f default_workflow_permissions=read -F can_approve_pull_request_reviews=true >/dev/null
-echo "set     squash-only merges, branch cleanup, Actions may open PRs (for /revert)"
+if gh api -X PUT "repos/$slug/actions/permissions/workflow" \
+  -f default_workflow_permissions=read -F can_approve_pull_request_reviews=true >/dev/null 2>&1; then
+  echo "set     squash-only merges, branch cleanup, Actions may open PRs (for /revert)"
+else # an organization can forbid that per repo; /revert then needs the org setting
+  gh api -X PUT "repos/$slug/actions/permissions/workflow" -f default_workflow_permissions=read >/dev/null
+  echo "set     squash-only merges, branch cleanup"
+  echo "TODO    /revert: allow Actions to create PRs in the org's Actions settings"
+fi
 
 # Master copy: Infisical, project "personal", env dev, folder /github
 token() { infisical secrets get CLAUDE_CODE_OAUTH_TOKEN --projectId f45535b0-69ef-422f-a292-9cfefd4bdbc1 \
