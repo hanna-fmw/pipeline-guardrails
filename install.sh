@@ -28,6 +28,10 @@ else # an organization can forbid that per repo; /revert then needs the org sett
   echo "set     squash-only merges, branch cleanup"
   echo "TODO    /revert: allow Actions to create PRs in the org's Actions settings"
 fi
+gh label create ai:auto -R "$slug" --color 0E8A16 --description "An agent may do this alone and open a PR" --force >/dev/null
+gh label create ai:pair -R "$slug" --color 1D76DB --description "An agent works on this together with Hanna" --force >/dev/null
+gh label create ai:working -R "$slug" --color FBCA04 --description "An agent is working on it now" --force >/dev/null
+echo "set     labels ai:auto, ai:pair, ai:working"
 
 # Master copy: Infisical, project "personal", env dev, folder /github
 token() { infisical secrets get CLAUDE_CODE_OAUTH_TOKEN --projectId f45535b0-69ef-422f-a292-9cfefd4bdbc1 \
