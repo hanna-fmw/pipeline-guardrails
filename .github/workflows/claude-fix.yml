@@ -39,9 +39,17 @@ jobs:
         with:
           fetch-depth: 1
       - uses: anthropics/claude-code-action@v1
+        timeout-minutes: 30 # runs take 1-8 min (2026-10-24); a stuck one stops and says so below
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           trigger_phrase: "@claude"
           claude_args: |
             --allowedTools "Bash(gh pr create:*)"
             --append-system-prompt "When you were called from an issue, finish by opening the pull request yourself with gh pr create: fill in .github/pull_request_template.md and put 'Closes #<issue number>' in the description."
+      - name: Say where it stopped
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          N: ${{ github.event.issue.number || github.event.pull_request.number }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: gh issue comment "$N" -R "$GITHUB_REPOSITORY" --body "Claude stopped before finishing (30-minute limit or an error, [log]($RUN)). Comment \`@claude\` again to retry."

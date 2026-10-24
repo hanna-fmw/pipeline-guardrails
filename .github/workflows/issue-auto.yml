@@ -112,6 +112,7 @@ jobs:
       - if: steps.task.outputs.skip != 'true'
         id: claude
         continue-on-error: true
+        timeout-minutes: 30 # runs take 1-8 min (2026-10-24); a stuck one stops and gets the "no PR" Slack line below
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
