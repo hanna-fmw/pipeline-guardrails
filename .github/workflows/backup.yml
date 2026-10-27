@@ -129,7 +129,7 @@ jobs:
 
       - name: Say it failed
         if: failure()
-        uses: hanna-fmw/pipeline-guardrails/.github/actions/slack-alert@main
+        uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@main
         with:
           token: ${{ secrets.SLACK_BOT_TOKEN }}
           channel: ${{ inputs.slack_channel }}

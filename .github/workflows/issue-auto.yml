@@ -131,18 +131,20 @@ jobs:
             open no PR, and say why in your final answer.
 
       - if: steps.task.outputs.skip != 'true'
+        id: nopr
         env:
-          SLACK_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           # A PR came out: the pipeline and the gate take it from here (and post to Slack)
           [ -z "$(gh pr list --head "ai/issue-$ISSUE" --state all --json number --jq '.[].number')" ] || exit 0
           gh issue edit "$ISSUE" --remove-label ai:working --remove-label ai:auto >/dev/null
           gh issue comment "$ISSUE" --body "Claude finished without opening a PR. Its reasoning is in the [run log]($RUN_URL). Add more detail to the issue, then add \`ai:auto\` again."
-          [ -n "$SLACK_TOKEN" ] || exit 0
           title=$(gh issue view "$ISSUE" --json title --jq '.title | gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;")')
-          data=$(jq -n --arg c "${{ inputs.slack_channel }}" \
-            --arg t "🔴 NO PR: <${{ github.server_url }}/$GH_REPO/issues/$ISSUE|${GH_REPO#*/} #$ISSUE>: $title" '{channel: $c, text: $t}')
-          res=$(printf 'header = "Authorization: Bearer %s"\n' "$SLACK_TOKEN" | curl -sS -K - \
-            -H 'Content-Type: application/json; charset=utf-8' --data "$data" https://slack.com/api/chat.postMessage || true)
-          echo "Slack: $(jq -r 'if .ok then "ok" else "failed: \(.error)" end' <<<"$res" 2>/dev/null || echo "failed: no reply")"
+          echo "line=🔴 NO PR: <${{ github.server_url }}/$GH_REPO/issues/$ISSUE|${GH_REPO#*/} #$ISSUE>: $title" >> "$GITHUB_OUTPUT"
+
+      - if: steps.nopr.outputs.line != ''
+        uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@main
+        with:
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          channel: ${{ inputs.slack_channel }}
+          text: ${{ steps.nopr.outputs.line }}

@@ -46,6 +46,7 @@ jobs:
       PR: ${{ inputs.pr }}
     steps:
       - uses: actions/checkout@v7
+      - uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@main # puts slack-post on PATH
 
       - name: Decide
         run: |
@@ -65,18 +66,10 @@ jobs:
           sref=$(jq -r '.body // ""' <<<"$old" | grep -o 'slack=[A-Z0-9]*:[0-9.]*' | head -1 | cut -d= -f2 || true)
           # This PR's one Slack message: edited if it exists, else posted and remembered in the gate comment
           slack() {
-            [ -n "$SLACK_TOKEN" ] || return 0
-            local text api data res
+            local text ref
             text="$1${1:+ }<$(jq -r .url <<<"$pr")|${GH_REPO#*/} #$PR>: $(jq -r '.title | gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;")' <<<"$pr")"
-            if [ -n "$sref" ]; then api=chat.update
-              data=$(jq -n --arg c "${sref%%:*}" --arg ts "${sref#*:}" --arg t "$text" '{channel: $c, ts: $ts, text: $t}')
-            else api=chat.postMessage
-              data=$(jq -n --arg c "${{ inputs.slack_channel }}" --arg t "$text" '{channel: $c, text: $t}')
-            fi
-            res=$(printf 'header = "Authorization: Bearer %s"\n' "$SLACK_TOKEN" | curl -sS -K - \
-              -H 'Content-Type: application/json; charset=utf-8' --data "$data" "https://slack.com/api/$api" || true)
-            echo "Slack ($api): $(jq -r 'if .ok then "ok" else "failed: \(.error)" end' <<<"$res" 2>/dev/null || echo "failed: no reply")"
-            [ -n "$sref" ] || sref=$(jq -r 'if .ok then "\(.channel):\(.ts)" else "" end' <<<"$res" 2>/dev/null || true)
+            ref=$(slack-post "${sref:-${{ inputs.slack_channel }}}" "$text")
+            [ -n "$sref" ] || sref=$ref
           }
           # A merge made by this workflow's token does not close "Closes #N" issues, so close them here
           close_linked() {

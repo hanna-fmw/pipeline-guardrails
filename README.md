@@ -37,7 +37,7 @@ It copies two small trigger workflows plus a PR template, `REVIEW.md`, Dependabo
 
 ## Backups (projects with a database)
 
-Opt-in, per repo: copy `templates/.github/workflows/backup.yml` and `templates/RESTORE.md` into the repo and fill in the placeholders. It backs a Supabase project up twice a day to Cloudflare R2 (database dump plus every Storage file), posts 🔴 to Slack when a run fails, and `scripts/pull-backups-to-drive.sh` makes the monthly third copy. Keys come from Infisical (`scripts/secrets-from-infisical.sh`). Setup, restore and the quarterly restore test are in `RESTORE.md`.
+Opt-in, per repo: copy `templates/.github/workflows/backup.yml` and `templates/RESTORE.md` into the repo and fill in the placeholders. It backs a Supabase project up twice a day to Cloudflare R2 (database dump plus every Storage file), posts 🔴 to Slack when a run fails, and `scripts/pull-backups-to-drive.sh` makes the monthly third copy. Keys come from Infisical (`scripts/keys.sh`). Setup, restore and the quarterly restore test are in `RESTORE.md`.
 
 ## On the GitHub free plan
 

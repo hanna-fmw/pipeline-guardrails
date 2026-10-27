@@ -1,0 +1,18 @@
+#!/bin/bash
+# The one Slack poster for every pipeline workflow. Token from $SLACK_TOKEN; without it, does nothing.
+# slack-post <channel> <text>            posts; prints "<channel id>:<ts>" so the message can be edited later
+# slack-post <channel id>:<ts> <text>    edits that message instead
+# Never fails the job: a failed post is a warning.
+[ -n "${SLACK_TOKEN:-}" ] || { echo "No Slack token: not posted." >&2; exit 0; }
+to=$1 text=$2
+if [[ $to == *:* ]]; then api=chat.update
+  data=$(jq -n --arg c "${to%%:*}" --arg ts "${to#*:}" --arg t "$text" '{channel: $c, ts: $ts, text: $t}')
+else api=chat.postMessage
+  data=$(jq -n --arg c "$to" --arg t "$text" '{channel: $c, text: $t}')
+fi
+res=$(printf 'header = "Authorization: Bearer %s"\n' "$SLACK_TOKEN" | curl -sS -K - \
+  -H 'Content-Type: application/json; charset=utf-8' --data "$data" "https://slack.com/api/$api" || true)
+if [ "$(jq -r '.ok // false' <<<"$res" 2>/dev/null)" = true ]; then
+  echo "Slack ($api): ok" >&2; jq -r '"\(.channel):\(.ts)"' <<<"$res"
+else echo "::warning::Slack ($api) failed: $(jq -r '.error // "no reply"' <<<"$res" 2>/dev/null || echo "no reply")" >&2; fi
+exit 0

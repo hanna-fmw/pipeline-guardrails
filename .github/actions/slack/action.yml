@@ -1,0 +1,26 @@
+# The one Slack step for pipeline workflows (build-system foundation plan: one procedure each).
+#   With text: posts it, with a link to the run.
+#   Always: puts slack-post on PATH, for workflows that post or edit from a script (the gate).
+# uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@main
+name: slack
+description: Post to Slack, or make slack-post available to later steps
+inputs:
+  token:
+    description: SLACK_BOT_TOKEN
+    required: false
+  channel:
+    default: system
+  text:
+    default: ""
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        SLACK_TOKEN: ${{ inputs.token }}
+        C: ${{ inputs.channel }}
+        TEXT: ${{ inputs.text }}
+        RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        echo "$GITHUB_ACTION_PATH" >> "$GITHUB_PATH"
+        [ -z "$TEXT" ] || "$GITHUB_ACTION_PATH/slack-post" "$C" "$TEXT · <$RUN|run>" >/dev/null

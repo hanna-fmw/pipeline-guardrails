@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Put the pipeline into a repo: install.sh <repo-folder>
 # Copies the templates (never overwrites your own REVIEW.md, PR template or Claude settings),
-# sets the GitHub repo to squash-only merges, and sets the Claude token secret from Infisical.
+# sets the GitHub repo to squash-only merges, and sets the Claude and Slack secrets from Infisical.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")" && pwd)/templates"
 repo="$(cd "${1:?usage: install.sh <repo-folder>}" && pwd)"
@@ -33,18 +33,7 @@ gh label create ai:pair -R "$slug" --color 1D76DB --description "An agent works 
 gh label create ai:working -R "$slug" --color FBCA04 --description "An agent is working on it now" --force >/dev/null
 echo "set     labels ai:auto, ai:pair, ai:working"
 
-# Master copy: Infisical, project "personal", env dev, folder /github
-token() { infisical secrets get CLAUDE_CODE_OAUTH_TOKEN --projectId f45535b0-69ef-422f-a292-9cfefd4bdbc1 \
-  --env dev --path /github --plain --silent 2>/dev/null | tr -d '\n'; }
-if [ -n "$(token | head -c1)" ]; then
-  token | gh secret set CLAUDE_CODE_OAUTH_TOKEN -R "$slug"
-  echo "set     CLAUDE_CODE_OAUTH_TOKEN secret (from Infisical personal /github)"
-else
-  echo "TODO    Claude token: run 'claude setup-token' and save it in Infisical project personal,"
-  echo "        env dev, folder /github, as CLAUDE_CODE_OAUTH_TOKEN; then run this script again."
-fi
-if security find-generic-password -s slack-agents-bot >/dev/null 2>&1; then
-  security find-generic-password -s slack-agents-bot -w | gh secret set SLACK_BOT_TOKEN -R "$slug"
-  echo "set     SLACK_BOT_TOKEN secret (gate pings #pull-requests when a PR waits for you)"
-fi
+# Keys come from Infisical project "personal", env dev, folder /github (scripts/keys.sh)
+"$(dirname "$kit")/scripts/keys.sh" to-github "$slug" f45535b0-69ef-422f-a292-9cfefd4bdbc1 dev /github \
+  CLAUDE_CODE_OAUTH_TOKEN SLACK_BOT_TOKEN || echo "        (Claude token: 'claude setup-token'; Slack: the agents bot token)"
 echo "TODO    Claude GitHub App must have access to $slug: https://github.com/apps/claude"

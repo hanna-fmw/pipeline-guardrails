@@ -5,7 +5,7 @@
 # Usage: pull-backups-to-drive.sh <infisical project id> <env> <bucket> <drive folder> [--check]
 set -euo pipefail
 pid=$1 env=$2 bucket=$3 dest=$4
-key() { infisical secrets get "$1" --projectId "$pid" --env "$env" --path /backup --plain --silent | tr -d '\n'; }
+key() { "$(dirname "$0")/keys.sh" get "$pid" "$env" /backup "$1"; }
 AWS_ACCESS_KEY_ID="$(key R2_ACCESS_KEY_ID)"; AWS_SECRET_ACCESS_KEY="$(key R2_SECRET_ACCESS_KEY)"
 export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION=auto
 ep="$(key R2_ENDPOINT)"

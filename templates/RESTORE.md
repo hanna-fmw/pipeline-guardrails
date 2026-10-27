@@ -8,7 +8,7 @@ Every key goes into the project's Infisical folder `/backup`, under the names be
 
 1. **R2:** create bucket `<project>-backups` (EU jurisdiction). Lifecycle rule: delete `db/` after 90 days; keep `storage/`. Create an R2 API token with Object Read & Write on that bucket only. Save `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ENDPOINT` (the EU endpoint).
 2. **Supabase:** Storage → S3 connection → new access key: save `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`. Save the database password as `BACKUP_PG_PASSWORD`. Put the session pooler host (Connect → Session pooler) and region in `backup.yml`; they are not secret.
-3. **GitHub secrets:** `pipeline-guardrails/scripts/secrets-from-infisical.sh <owner>/<repo> <infisical project id> <env> /backup BACKUP_PG_PASSWORD R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT STORAGE_ACCESS_KEY_ID STORAGE_SECRET_ACCESS_KEY`. `SLACK_BOT_TOKEN` is already set by the pipeline install.
+3. **GitHub secrets:** `pipeline-guardrails/scripts/keys.sh to-github <owner>/<repo> <infisical project id> <env> /backup BACKUP_PG_PASSWORD R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT STORAGE_ACCESS_KEY_ID STORAGE_SECRET_ACCESS_KEY`. `SLACK_BOT_TOKEN` is already set by the pipeline install.
 4. Run the workflow once by hand (Actions → backup → Run workflow), then do the restore test below.
 
 Drive copy, monthly: `pull-backups-to-drive.sh <infisical project id> <env> <project>-backups <drive folder>`.
