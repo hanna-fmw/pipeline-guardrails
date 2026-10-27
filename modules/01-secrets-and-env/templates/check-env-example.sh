@@ -30,7 +30,8 @@ referenced=$(grep -REho \
 missing=$(comm -23 <(echo "$referenced") <(echo "$declared") | grep -v '^$' || true)
 if [[ -n "$missing" ]]; then
   echo "ERROR: env vars used in code but missing from $EXAMPLE:" >&2
-  echo "$missing" | sed 's/^/  - /' >&2 # shellcheck disable=SC2001
+  # shellcheck disable=SC2001 # prefixes every line of a list
+  echo "$missing" | sed 's/^/  - /' >&2
   echo "" >&2
   echo "Add them to $EXAMPLE (names only, no values), then re-commit." >&2
   exit 1
