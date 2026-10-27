@@ -3,7 +3,8 @@
 #   Give the bucket a lifecycle rule that deletes db/ after 90 days.
 # - storage/<bucket>/<path>: every Storage file, copied once and never deleted here,
 #   so a file deleted in the app stays in the backup.
-# Pings Healthchecks (start, success or fail), which alerts when a run fails or never happens.
+# A failed run posts 🔴 to Slack (shared slack-alert step); a run that never happens is caught by
+# the scheduled-jobs watcher, which reads GitHub's scheduled runs.
 # Copy 3 is the monthly drive copy (scripts/pull-backups-to-drive.sh); restore: templates/RESTORE.md.
 name: backup
 on:
@@ -36,6 +37,9 @@ on:
       storage_region:
         type: string
         default: ""
+      slack_channel:
+        type: string
+        default: system
     secrets:
       PG_PASSWORD:
         required: true
@@ -49,7 +53,7 @@ on:
         required: false
       STORAGE_SECRET_ACCESS_KEY:
         required: false
-      HEALTHCHECK_URL:
+      SLACK_BOT_TOKEN:
         required: false
 
 permissions:
@@ -60,7 +64,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
-      HC: ${{ secrets.HEALTHCHECK_URL }}
       PROJECT: ${{ inputs.project }}
       BUCKET: ${{ inputs.bucket }}
       PGV: ${{ inputs.pg_version }}
@@ -77,9 +80,6 @@ jobs:
       AWS_DEFAULT_REGION: auto
       R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
     steps:
-      - name: Tell Healthchecks we started
-        run: '[ -z "$HC" ] || curl -fsS -m 10 --retry 3 -o /dev/null "$HC/start" || true'
-
       - name: Install the Postgres client
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg
@@ -127,9 +127,10 @@ jobs:
             echo "storage/$b: $(rclone size "dst:$BUCKET/storage/$b" | tr '\n' ' ')"
           done
 
-      - name: Tell Healthchecks we finished
-        if: always()
-        run: |
-          [ -z "$HC" ] && exit 0
-          if [ "${{ job.status }}" = success ]; then curl -fsS -m 10 --retry 3 -o /dev/null "$HC" || true
-          else curl -fsS -m 10 --retry 3 -o /dev/null "$HC/fail" || true; fi
+      - name: Say it failed
+        if: failure()
+        uses: hanna-fmw/pipeline-guardrails/.github/actions/slack-alert@main
+        with:
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          channel: ${{ inputs.slack_channel }}
+          text: "🔴 Backup failed: ${{ github.repository }}"

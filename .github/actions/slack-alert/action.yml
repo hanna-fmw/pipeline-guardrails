@@ -1,0 +1,28 @@
+# The one Slack step for workflow alerts: posts a line with a link to the run.
+# Used as: uses: hanna-fmw/pipeline-guardrails/.github/actions/slack-alert@main
+# Does nothing without a token, and never fails the job.
+name: slack-alert
+description: Post one line to a Slack channel, linking the run
+inputs:
+  token:
+    description: SLACK_BOT_TOKEN
+    required: false
+  channel:
+    default: system
+  text:
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        T: ${{ inputs.token }}
+        C: ${{ inputs.channel }}
+        TEXT: ${{ inputs.text }}
+        RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        [ -n "$T" ] || { echo "No Slack token: not posted."; exit 0; }
+        data=$(jq -n --arg c "$C" --arg t "$TEXT · <$RUN|run>" '{channel: $c, text: $t}')
+        res=$(printf 'header = "Authorization: Bearer %s"\n' "$T" | curl -sS -K - \
+          -H 'Content-Type: application/json; charset=utf-8' --data "$data" https://slack.com/api/chat.postMessage || true)
+        [ "$(jq -r '.ok // false' <<<"$res" 2>/dev/null)" = true ] || echo "::warning::Slack post failed: $(jq -r '.error // "no reply"' <<<"$res" 2>/dev/null)"
