@@ -11,12 +11,12 @@ concurrency:
 
 jobs:
   checks:
-    uses: hanna-fmw/pipeline-guardrails/.github/workflows/checks.yml@main
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/checks.yml@v1
     permissions:
       contents: read
 
   review:
-    uses: hanna-fmw/pipeline-guardrails/.github/workflows/claude-review.yml@main
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/claude-review.yml@v1
     with:
       kind: review
       depth: standard # quick | standard | deep
@@ -29,7 +29,7 @@ jobs:
       id-token: write
 
   security:
-    uses: hanna-fmw/pipeline-guardrails/.github/workflows/claude-review.yml@main
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/claude-review.yml@v1
     with:
       kind: security
     secrets:
@@ -43,7 +43,7 @@ jobs:
   gate:
     needs: [checks, review, security]
     if: always()
-    uses: hanna-fmw/pipeline-guardrails/.github/workflows/gate.yml@main
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/gate.yml@v1
     with:
       pr: ${{ github.event.pull_request.number }}
       new_commits: ${{ github.event.action == 'synchronize' }}

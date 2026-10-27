@@ -46,7 +46,7 @@ jobs:
       PR: ${{ inputs.pr }}
     steps:
       - uses: actions/checkout@v7
-      - uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@main # puts slack-post on PATH
+      - uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@v1 # puts slack-post on PATH
 
       - name: Decide
         run: |

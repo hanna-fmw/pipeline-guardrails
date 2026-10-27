@@ -35,6 +35,10 @@ It copies two small trigger workflows plus a PR template, `REVIEW.md`, Dependabo
 3. Add the project's checks as package.json scripts: `lint`, `typecheck`, `test`, `build`.
 4. Fill in `REVIEW.md`: what failure looks like here, what is always high risk, what to skip.
 
+## Versions
+
+Repos pin a release, never `main`: `@v1` moves to each new v1.x.y, so fixes reach every repo while a breaking change (v2) waits until each repo moves on purpose. `scripts/release.sh vX.Y.Z` tags only a commit the self-test (`selftest.yml`: the checks workflow on this repo plus `tests/run.sh`) passed. Which repo pins what, and who is behind, shows in bb (Components), through the system register's daily check.
+
 ## Backups (projects with a database)
 
 Opt-in, per repo: copy `templates/.github/workflows/backup.yml` and `templates/RESTORE.md` into the repo and fill in the placeholders. It backs a Supabase project up twice a day to a Google shared drive (no stored key) or Cloudflare R2 (database dump plus every Storage file), posts 🔴 to Slack when a run fails, and `scripts/pull-backups-to-drive.sh` makes the monthly third copy. Keys come from Infisical (`scripts/keys.sh`). Setup, restore and the quarterly restore test are in `RESTORE.md`.

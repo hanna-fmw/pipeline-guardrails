@@ -143,7 +143,7 @@ jobs:
           echo "line=🔴 NO PR: <${{ github.server_url }}/$GH_REPO/issues/$ISSUE|${GH_REPO#*/} #$ISSUE>: $title" >> "$GITHUB_OUTPUT"
 
       - if: steps.nopr.outputs.line != ''
-        uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@main
+        uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@v1
         with:
           token: ${{ secrets.SLACK_BOT_TOKEN }}
           channel: ${{ inputs.slack_channel }}

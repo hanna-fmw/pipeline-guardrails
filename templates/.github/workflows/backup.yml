@@ -14,7 +14,7 @@ jobs:
     permissions:
       contents: read
       id-token: write # lets the run log in to Google without a stored key
-    uses: hanna-fmw/pipeline-guardrails/.github/workflows/backup.yml@main
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/backup.yml@v1
     with:
       project: <short-name>
       dest: drive # or r2 (then: bucket, and the R2_* secrets)

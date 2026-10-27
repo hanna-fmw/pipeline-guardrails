@@ -1,0 +1,28 @@
+# The kit tests itself: the checks workflow run on this repo, plus tests/run.sh.
+# scripts/release.sh tags a commit only when this is green on it.
+name: selftest
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    uses: ./.github/workflows/checks.yml
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install gitleaks (the version and checksum checks.yml pins)
+        run: |
+          v=$(grep -oE 'GITLEAKS_VERSION: [0-9.]+' .github/workflows/checks.yml | cut -d' ' -f2)
+          f="gitleaks_${v}_linux_x64.tar.gz"
+          curl -sSLo "$f" "https://github.com/gitleaks/gitleaks/releases/download/v${v}/$f"
+          sed -n '/GITLEAKS_VERSION:/,/sha256sum/p' .github/workflows/checks.yml | grep -oE '[0-9a-f]{64}  \$f' | sed "s/\$f/$f/" | sha256sum -c --quiet
+          tar -xzf "$f" gitleaks && sudo mv gitleaks /usr/local/bin/
+      - run: bash tests/run.sh
