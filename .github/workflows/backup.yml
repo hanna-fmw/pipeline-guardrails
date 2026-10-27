@@ -1,11 +1,13 @@
-# Off-site backup (3-2-1, copy 2) of a Supabase project to Cloudflare R2.
-# - db/<project>-<time>.dump: pg_dump custom format of the chosen schemas, checked before upload.
-#   Give the bucket a lifecycle rule that deletes db/ after 90 days.
+# Off-site backup (3-2-1, copy 2) of a Supabase project, to Google Drive or Cloudflare R2.
+# - db/<project>-<time>.dump: pg_dump custom format of the chosen schemas, checked before upload;
+#   dumps older than 90 days are deleted.
 # - storage/<bucket>/<path>: every Storage file, copied once and never deleted here,
 #   so a file deleted in the app stays in the backup.
-# A failed run posts 🔴 to Slack (shared slack-alert step); a run that never happens is caught by
+# Where it goes is one setting (dest). drive: a shared drive, reached with no stored key through
+# Google workload identity (the caller grants id-token: write). r2: a bucket, with R2 keys.
+# A failed run posts 🔴 to Slack (shared slack step); a run that never happens is caught by
 # the scheduled-jobs watcher, which reads GitHub's scheduled runs.
-# Copy 3 is the monthly drive copy (scripts/pull-backups-to-drive.sh); restore: templates/RESTORE.md.
+# Copy 3 and restore: templates/RESTORE.md.
 name: backup
 on:
   workflow_call:
@@ -13,9 +15,21 @@ on:
       project:
         type: string
         required: true # short name, used in file names
+      dest:
+        type: string
+        required: true # drive or r2
+      drive_id:
+        type: string
+        default: "" # dest drive: the shared drive's id (from its web address)
+      gcp_provider:
+        type: string
+        default: "" # dest drive: projects/<number>/locations/global/workloadIdentityPools/<pool>/providers/<provider>
+      gcp_service_account:
+        type: string
+        default: "" # dest drive: the service account that is a Content manager on the shared drive
       bucket:
         type: string
-        required: true # R2 bucket
+        default: "" # dest r2: the bucket
       pg_host:
         type: string
         required: true # Supabase session pooler host, e.g. aws-0-eu-north-1.pooler.supabase.com
@@ -44,11 +58,11 @@ on:
       PG_PASSWORD:
         required: true
       R2_ACCESS_KEY_ID:
-        required: true
+        required: false
       R2_SECRET_ACCESS_KEY:
-        required: true
+        required: false
       R2_ENDPOINT:
-        required: true
+        required: false
       STORAGE_ACCESS_KEY_ID:
         required: false
       STORAGE_SECRET_ACCESS_KEY:
@@ -58,14 +72,14 @@ on:
 
 permissions:
   contents: read
+  id-token: write # Google workload identity (dest drive)
 
 jobs:
   backup:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 55 # a Google access token lasts 60 minutes
     env:
       PROJECT: ${{ inputs.project }}
-      BUCKET: ${{ inputs.bucket }}
       PGV: ${{ inputs.pg_version }}
       SCHEMAS: ${{ inputs.schemas }}
       MUST_HAVE: ${{ inputs.must_have_tables }}
@@ -75,18 +89,61 @@ jobs:
       PGDATABASE: postgres
       PGSSLMODE: require
       PGPASSWORD: ${{ secrets.PG_PASSWORD }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-      AWS_DEFAULT_REGION: auto
-      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      # rclone remotes from env: src = Supabase Storage, dst = where backups go
+      RCLONE_CONFIG_SRC_TYPE: s3
+      RCLONE_CONFIG_SRC_PROVIDER: Other
+      RCLONE_CONFIG_SRC_ACCESS_KEY_ID: ${{ secrets.STORAGE_ACCESS_KEY_ID }}
+      RCLONE_CONFIG_SRC_SECRET_ACCESS_KEY: ${{ secrets.STORAGE_SECRET_ACCESS_KEY }}
+      RCLONE_CONFIG_SRC_ENDPOINT: ${{ inputs.storage_endpoint }}
+      RCLONE_CONFIG_SRC_REGION: ${{ inputs.storage_region }}
+      RCLONE_CONFIG_SRC_FORCE_PATH_STYLE: "true"
     steps:
-      - name: Install the Postgres client
+      - name: Log in to Google (no key)
+        if: inputs.dest == 'drive'
+        id: google
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
+        with:
+          workload_identity_provider: ${{ inputs.gcp_provider }}
+          service_account: ${{ inputs.gcp_service_account }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/drive
+
+      - name: Point rclone at the destination
+        env:
+          DEST: ${{ inputs.dest }}
+          DRIVE_ID: ${{ inputs.drive_id }}
+          TOKEN: ${{ steps.google.outputs.access_token }}
+          R2_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          BUCKET: ${{ inputs.bucket }}
+        run: |
+          case "$DEST" in
+            drive)
+              [ -n "$DRIVE_ID" ] || { echo "::error::dest drive needs drive_id"; exit 1; }
+              exp=$(date -u -d '+55 min' +%Y-%m-%dT%H:%M:%SZ)
+              tok=$(jq -cn --arg t "$TOKEN" --arg e "$exp" '{access_token: $t, token_type: "Bearer", expiry: $e}')
+              echo "::add-mask::$tok"
+              { echo "RCLONE_CONFIG_DST_TYPE=drive"; echo "RCLONE_CONFIG_DST_SCOPE=drive"
+                echo "RCLONE_CONFIG_DST_TEAM_DRIVE=$DRIVE_ID"; echo "RCLONE_CONFIG_DST_TOKEN=$tok"
+                echo "RCLONE_DRIVE_USE_TRASH=false"; echo "ROOT=dst:"; } >> "$GITHUB_ENV" ;;
+            r2)
+              [ -n "$BUCKET" ] && [ -n "$R2_ENDPOINT" ] || { echo "::error::dest r2 needs bucket and the R2 secrets"; exit 1; }
+              { echo "RCLONE_CONFIG_DST_TYPE=s3"; echo "RCLONE_CONFIG_DST_PROVIDER=Cloudflare"
+                echo "RCLONE_CONFIG_DST_ACCESS_KEY_ID=$R2_ID"; echo "RCLONE_CONFIG_DST_SECRET_ACCESS_KEY=$R2_KEY"
+                echo "RCLONE_CONFIG_DST_ENDPOINT=$R2_ENDPOINT"; echo "RCLONE_CONFIG_DST_NO_CHECK_BUCKET=true"
+                echo "ROOT=dst:$BUCKET/"; } >> "$GITHUB_ENV" ;;
+            *) echo "::error::dest must be drive or r2"; exit 1 ;;
+          esac
+
+      - name: Install the Postgres client and rclone
         run: |
           sudo install -d /usr/share/postgresql-common/pgdg
           sudo curl -fsS -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
           sudo apt-get update -qq && sudo apt-get install -y -qq "postgresql-client-$PGV" >/dev/null
-          "/usr/lib/postgresql/$PGV/bin/pg_dump" --version
+          sudo apt-get install -y -qq rclone >/dev/null
+          "/usr/lib/postgresql/$PGV/bin/pg_dump" --version; rclone version | head -1
 
       - name: Back up the database
         run: |
@@ -100,31 +157,17 @@ jobs:
           for t in $MUST_HAVE; do
             grep -q "TABLE DATA [a-z_]* $t " toc.txt || { echo "::error::The dump has no data for table $t"; exit 1; }
           done
-          aws s3 cp "$file" "s3://$BUCKET/db/$file" --endpoint-url "$R2_ENDPOINT" --only-show-errors
+          rclone copyto "$file" "${ROOT}db/$file"
+          rclone delete "${ROOT}db" --min-age 90d
           echo "Uploaded db/$file ($(du -h "$file" | cut -f1), $(grep -c 'TABLE DATA' toc.txt) tables)"
 
       - name: Back up Storage files
         if: inputs.storage_endpoint != ''
-        env:
-          RCLONE_CONFIG_SRC_TYPE: s3
-          RCLONE_CONFIG_SRC_PROVIDER: Other
-          RCLONE_CONFIG_SRC_ACCESS_KEY_ID: ${{ secrets.STORAGE_ACCESS_KEY_ID }}
-          RCLONE_CONFIG_SRC_SECRET_ACCESS_KEY: ${{ secrets.STORAGE_SECRET_ACCESS_KEY }}
-          RCLONE_CONFIG_SRC_ENDPOINT: ${{ inputs.storage_endpoint }}
-          RCLONE_CONFIG_SRC_REGION: ${{ inputs.storage_region }}
-          RCLONE_CONFIG_SRC_FORCE_PATH_STYLE: "true"
-          RCLONE_CONFIG_DST_TYPE: s3
-          RCLONE_CONFIG_DST_PROVIDER: Cloudflare
-          RCLONE_CONFIG_DST_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          RCLONE_CONFIG_DST_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          RCLONE_CONFIG_DST_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
-          RCLONE_CONFIG_DST_NO_CHECK_BUCKET: "true"
         run: |
-          sudo apt-get install -y -qq rclone >/dev/null
           # copy, never sync: only adds and updates, so deletions in the app never reach the backup
           for b in $(rclone lsf --dirs-only src: | tr -d /); do
-            rclone copy "src:$b" "dst:$BUCKET/storage/$b" --transfers 8 --stats-one-line --stats 0
-            echo "storage/$b: $(rclone size "dst:$BUCKET/storage/$b" | tr '\n' ' ')"
+            rclone copy "src:$b" "${ROOT}storage/$b" --transfers 8 --stats-one-line --stats 0
+            echo "storage/$b: $(rclone size "${ROOT}storage/$b" | tr '\n' ' ')"
           done
 
       - name: Say it failed
