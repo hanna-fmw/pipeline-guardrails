@@ -27,42 +27,12 @@ command -v jq >/dev/null || exit 0   # never break a session over a missing tool
 MESSAGE="$(printf '%s' "$INPUT" | jq -r '.last_assistant_message // ""')"
 [ -z "$MESSAGE" ] && exit 0
 
-# Format-class detectors. Keep in sync with gitleaks upstream rules.
-# Deliberately narrow: a false positive here nags on every turn and gets the
-# hook disabled, which is worse than the leak it was meant to catch.
-PATTERNS=(
-  'AKIA[0-9A-Z]{16}'                        # AWS access key id
-  'ASIA[0-9A-Z]{16}'                        # AWS temporary key id
-  'gh[pousr]_[A-Za-z0-9]{36,}'              # GitHub PAT / OAuth / refresh
-  'github_pat_[A-Za-z0-9_]{60,}'            # GitHub fine-grained PAT
-  'sk-(proj|svcacct|admin)-[A-Za-z0-9_-]{20,}'  # OpenAI (current)
-  'sk-[A-Za-z0-9]{32,}'                     # OpenAI (legacy)
-  'sk-ant-[A-Za-z0-9_-]{20,}'               # Anthropic
-  'sk_live_[A-Za-z0-9]{20,}'                # Stripe live secret
-  'rk_live_[A-Za-z0-9]{20,}'                # Stripe live restricted
-  'whsec_[A-Za-z0-9]{20,}'                  # Stripe webhook signing
-  'sb_secret_[A-Za-z0-9_-]{20,}'            # Supabase secret key
-  'sbp_[a-f0-9]{40}'                        # Supabase personal access token
-  'xox[baprs]-[A-Za-z0-9-]{10,}'            # Slack
-  'AIza[0-9A-Za-z_-]{35}'                   # Google API key
-  'glpat-[A-Za-z0-9_-]{20,}'                # GitLab PAT
-  'dop_v1_[a-f0-9]{64}'                     # DigitalOcean
-  'shp(at|ss|pa)_[a-f0-9]{32}'              # Shopify
-  'eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}'  # JWT
-  '-----BEGIN [A-Z ]*PRIVATE KEY-----'      # private key block
-  'postgres(ql)?://[^:]+:[^@]+@'            # connection string with password
-  'mongodb(\+srv)?://[^:]+:[^@]+@'
-)
-
-HITS=""
-for pat in "${PATTERNS[@]}"; do
-  # `--` matters: patterns starting with `-` are otherwise read as grep options.
-  if printf '%s' "$MESSAGE" | grep -qE -- "$pat"; then
-    # Report the pattern that matched, never the value that matched it —
-    # this hook's own output would otherwise become the leak.
-    HITS="${HITS}  - matched /${pat}/"$'\n'
-  fi
-done
+# The rules are gitleaks' own (one rule set for CI, git hooks and these hooks; version pinned in
+# .github/workflows/checks.yml). Report the rule that matched, never the value: this hook's own
+# output would otherwise become the leak.
+command -v gitleaks >/dev/null || { jq -n '{systemMessage: "scan-final-message.sh: gitleaks not installed, final message NOT scanned"}'; exit 0; }
+HITS="$(printf '%s' "$MESSAGE" | gitleaks stdin --no-banner --redact --report-format json --report-path - --exit-code 0 2>/dev/null \
+  | jq -r '.[]? | "  - gitleaks rule \(.RuleID)"' | sort -u)"
 
 [ -z "$HITS" ] && exit 0
 
@@ -71,7 +41,7 @@ ${HITS}
 The value is already in this transcript. Treat it as compromised:
   1. Rotate the credential now.
   2. Check whether it also reached a commit, a log, or a shared link.
-  3. If this is a false positive, narrow the pattern in scan-final-message.sh."
+  3. If this is a false positive, add a gitleaks allowlist entry (.gitleaks.toml)."
 
 jq -n --arg msg "$WARNING" '{systemMessage: $msg, suppressOutput: true}'
 exit 0
