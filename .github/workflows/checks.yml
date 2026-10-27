@@ -73,7 +73,7 @@ jobs:
       - name: Leaked secrets in this PR's commits
         if: github.event_name == 'pull_request'
         env:
-          GITLEAKS_VERSION: 8.30.1 # bump together with the checksum below
+          GITLEAKS_VERSION: 8.30.1 # the one gitleaks pin: bump with the checksum below; ops reads this exact line shape
           BASE: ${{ github.event.pull_request.base.sha }}
         run: |
           f="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
