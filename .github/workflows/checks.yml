@@ -59,7 +59,7 @@ jobs:
             curl -sSLo "$f" "https://github.com/rhysd/actionlint/releases/download/v1.7.12/$f"
             echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $f" | sha256sum -c --quiet
             tar -xzf "$f" actionlint
-            ./actionlint -color
+            SHELLCHECK_OPTS="-e SC2016" ./actionlint -color # same exception as the shell-script lint below
           fi
           mapfile -t sh < <(git ls-files '*.sh')
           [ ${#sh[@]} -eq 0 ] || shellcheck -e SC2016 "${sh[@]}" # SC2016: '$x' in single quotes is usually meant (GraphQL, jq)

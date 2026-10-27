@@ -167,7 +167,8 @@ jobs:
           if [ "$KIND" = review ]; then
             risk=$(jq -r .risk <<<"$OUT")
             for t in low medium high; do
-              gh label create "risk:$t" --force --color "$( [ $t = low ] && echo 2f7d4f || ([ $t = medium ] && echo b45309 || echo b91c1c))" >/dev/null
+              case $t in low) c=2f7d4f ;; medium) c=b45309 ;; *) c=b91c1c ;; esac
+              gh label create "risk:$t" --force --color "$c" >/dev/null
               [ "$t" = "$risk" ] || gh pr edit "$PR" --remove-label "risk:$t" >/dev/null 2>&1 || true
             done
             gh pr edit "$PR" --add-label "risk:$risk"
