@@ -1,6 +1,6 @@
 #!/bin/bash
 # Releases the kit: tags main as vX.Y.Z and moves the major tag (v1) that every repo pins.
-# Refuses unless main is pushed and selftest passed on that exact commit.
+# Refuses unless main is pushed and selftest passed on that exact commit. Writes the release notes (the changelog).
 # Usage: release.sh vX.Y.Z      (a breaking change is a new major: v2.0.0, then repos move one by one)
 set -euo pipefail
 v=${1:?usage: release.sh vX.Y.Z}
@@ -15,4 +15,6 @@ jq -e 'index("success") != null' <<<"$runs" >/dev/null || { echo "FAILED: selfte
 git tag -a "$v" -m "$v" "$sha"
 git tag -fa "$major" -m "$major -> $v" "$sha"
 git push -q origin "$v" && git push -q -f origin "$major"
-echo "released $v; $major now points at it"
+# The changelog: GitHub's release page, notes written from the commits since the last release
+gh release create "$v" -R hanna-fmw/pipeline-guardrails --verify-tag --generate-notes --latest >/dev/null
+echo "released $v; $major now points at it; notes: https://github.com/hanna-fmw/pipeline-guardrails/releases/tag/$v"
