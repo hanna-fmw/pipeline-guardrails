@@ -35,6 +35,10 @@ It copies two small trigger workflows plus a PR template, `REVIEW.md`, Dependabo
 3. Add the project's checks as package.json scripts: `lint`, `typecheck`, `test`, `build`.
 4. Fill in `REVIEW.md`: what failure looks like here, what is always high risk, what to skip.
 
+## Backups (projects with a database)
+
+Opt-in, per repo: copy `templates/.github/workflows/backup.yml` and `templates/RESTORE.md` into the repo and fill in the placeholders. It backs a Supabase project up twice a day to Cloudflare R2 (database dump plus every Storage file), alerts through Healthchecks, and `scripts/pull-backups-to-drive.sh` makes the monthly third copy. Setup, restore and the quarterly restore test are in `RESTORE.md`.
+
 ## On the GitHub free plan
 
 Private repos on the free plan cannot lock the merge button (rulesets need GitHub Pro or a public repo). Everything above still runs; the gate is a red or green check, and you merge only on green. A PR runs the workflow files on its own branch, so a PR that edits `.github/` could fake a green gate; that is why those paths are always high risk and need your own review. With Pro, make `gate` a required status check, require conversation resolution, and block direct pushes to `main`.

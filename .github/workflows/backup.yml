@@ -1,0 +1,135 @@
+# Off-site backup (3-2-1, copy 2) of a Supabase project to Cloudflare R2.
+# - db/<project>-<time>.dump: pg_dump custom format of the chosen schemas, checked before upload.
+#   Give the bucket a lifecycle rule that deletes db/ after 90 days.
+# - storage/<bucket>/<path>: every Storage file, copied once and never deleted here,
+#   so a file deleted in the app stays in the backup.
+# Pings Healthchecks (start, success or fail), which alerts when a run fails or never happens.
+# Copy 3 is the monthly drive copy (scripts/pull-backups-to-drive.sh); restore: templates/RESTORE.md.
+name: backup
+on:
+  workflow_call:
+    inputs:
+      project:
+        type: string
+        required: true # short name, used in file names
+      bucket:
+        type: string
+        required: true # R2 bucket
+      pg_host:
+        type: string
+        required: true # Supabase session pooler host, e.g. aws-0-eu-north-1.pooler.supabase.com
+      pg_user:
+        type: string
+        required: true # postgres.<project ref>
+      pg_version:
+        type: string
+        default: "17"
+      schemas:
+        type: string
+        default: public auth storage
+      must_have_tables:
+        type: string
+        default: "" # space-separated; the dump fails unless each one has data rows
+      storage_endpoint:
+        type: string
+        default: "" # https://<project ref>.supabase.co/storage/v1/s3, empty = skip files
+      storage_region:
+        type: string
+        default: ""
+    secrets:
+      PG_PASSWORD:
+        required: true
+      R2_ACCESS_KEY_ID:
+        required: true
+      R2_SECRET_ACCESS_KEY:
+        required: true
+      R2_ENDPOINT:
+        required: true
+      STORAGE_ACCESS_KEY_ID:
+        required: false
+      STORAGE_SECRET_ACCESS_KEY:
+        required: false
+      HEALTHCHECK_URL:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      HC: ${{ secrets.HEALTHCHECK_URL }}
+      PROJECT: ${{ inputs.project }}
+      BUCKET: ${{ inputs.bucket }}
+      PGV: ${{ inputs.pg_version }}
+      SCHEMAS: ${{ inputs.schemas }}
+      MUST_HAVE: ${{ inputs.must_have_tables }}
+      PGHOST: ${{ inputs.pg_host }}
+      PGPORT: "5432"
+      PGUSER: ${{ inputs.pg_user }}
+      PGDATABASE: postgres
+      PGSSLMODE: require
+      PGPASSWORD: ${{ secrets.PG_PASSWORD }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+    steps:
+      - name: Tell Healthchecks we started
+        run: '[ -z "$HC" ] || curl -fsS -m 10 --retry 3 -o /dev/null "$HC/start" || true'
+
+      - name: Install the Postgres client
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsS -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq && sudo apt-get install -y -qq "postgresql-client-$PGV" >/dev/null
+          "/usr/lib/postgresql/$PGV/bin/pg_dump" --version
+
+      - name: Back up the database
+        run: |
+          bin="/usr/lib/postgresql/$PGV/bin"
+          file="$PROJECT-$(date -u +%Y-%m-%dT%H%MZ).dump"
+          args=()
+          for s in $SCHEMAS; do args+=("--schema=$s"); done
+          "$bin/pg_dump" --format=custom --no-owner --no-privileges "${args[@]}" --file="$file"
+          # The dump must read back, and hold data for the tables that matter, or it is not a backup
+          "$bin/pg_restore" --list "$file" > toc.txt
+          for t in $MUST_HAVE; do
+            grep -q "TABLE DATA [a-z_]* $t " toc.txt || { echo "::error::The dump has no data for table $t"; exit 1; }
+          done
+          aws s3 cp "$file" "s3://$BUCKET/db/$file" --endpoint-url "$R2_ENDPOINT" --only-show-errors
+          echo "Uploaded db/$file ($(du -h "$file" | cut -f1), $(grep -c 'TABLE DATA' toc.txt) tables)"
+
+      - name: Back up Storage files
+        if: inputs.storage_endpoint != ''
+        env:
+          RCLONE_CONFIG_SRC_TYPE: s3
+          RCLONE_CONFIG_SRC_PROVIDER: Other
+          RCLONE_CONFIG_SRC_ACCESS_KEY_ID: ${{ secrets.STORAGE_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_SRC_SECRET_ACCESS_KEY: ${{ secrets.STORAGE_SECRET_ACCESS_KEY }}
+          RCLONE_CONFIG_SRC_ENDPOINT: ${{ inputs.storage_endpoint }}
+          RCLONE_CONFIG_SRC_REGION: ${{ inputs.storage_region }}
+          RCLONE_CONFIG_SRC_FORCE_PATH_STYLE: "true"
+          RCLONE_CONFIG_DST_TYPE: s3
+          RCLONE_CONFIG_DST_PROVIDER: Cloudflare
+          RCLONE_CONFIG_DST_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_DST_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          RCLONE_CONFIG_DST_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          RCLONE_CONFIG_DST_NO_CHECK_BUCKET: "true"
+        run: |
+          sudo apt-get install -y -qq rclone >/dev/null
+          # copy, never sync: only adds and updates, so deletions in the app never reach the backup
+          for b in $(rclone lsf --dirs-only src: | tr -d /); do
+            rclone copy "src:$b" "dst:$BUCKET/storage/$b" --transfers 8 --stats-one-line --stats 0
+            echo "storage/$b: $(rclone size "dst:$BUCKET/storage/$b" | tr '\n' ' ')"
+          done
+
+      - name: Tell Healthchecks we finished
+        if: always()
+        run: |
+          [ -z "$HC" ] && exit 0
+          if [ "${{ job.status }}" = success ]; then curl -fsS -m 10 --retry 3 -o /dev/null "$HC" || true
+          else curl -fsS -m 10 --retry 3 -o /dev/null "$HC/fail" || true; fi
