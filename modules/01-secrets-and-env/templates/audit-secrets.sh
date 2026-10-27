@@ -26,6 +26,7 @@ status=0
 
 if [ -n "$missing_from_inventory" ]; then
   echo "Env vars in $EXAMPLE but NOT documented in $INVENTORY:" >&2
+  # shellcheck disable=SC2086 # a word list, split on purpose
   printf '  %s\n' $missing_from_inventory >&2
   echo "  -> add owner, scope, and rotation date for each." >&2
   status=1
@@ -35,6 +36,7 @@ fi
 # that are not variables, so this side is a prompt to look, not a failure.
 if [ -n "$missing_from_example" ]; then
   echo "Names in $INVENTORY with no matching entry in $EXAMPLE (check for a removed or renamed var):" >&2
+  # shellcheck disable=SC2086 # a word list, split on purpose
   printf '  %s\n' $missing_from_example >&2
 fi
 
