@@ -17,10 +17,10 @@ for o in $owners; do
     main=$(gh api "repos/$r/git/ref/heads/main" --jq .object.sha) || { echo "FAILED: $r (no main)"; continue; }
     gh api -X DELETE "repos/$r/git/refs/heads/$br" >/dev/null 2>&1
     gh api "repos/$r/git/refs" -f ref="refs/heads/$br" -f sha="$main" >/dev/null || { echo "FAILED: $r (branch)"; continue; }
-    gh api -X PUT "repos/$r/contents/$f" -f message="ci: pipeline file from the kit template" -f branch="$br" \
-      -f content="$(base64 < "$tpl" | tr -d '\n')" -f sha="$(gh api "repos/$r/contents/$f" --jq .sha)" >/dev/null || { echo "FAILED: $r (write)"; continue; }
-    [ -z "$old" ] || gh api -X DELETE "repos/$r/contents/.github/workflows/commands.yml" -f message="ci: commands.yml folded into the kit's router" \
-      -f branch="$br" -f sha="$old" >/dev/null || { echo "FAILED: $r (delete commands.yml)"; continue; }
+    head=$(gh api -X PUT "repos/$r/contents/$f" -f message="ci: pipeline file from the kit template" -f branch="$br" \
+      -f content="$(base64 < "$tpl" | tr -d '\n')" -f sha="$(gh api "repos/$r/contents/$f" --jq .sha)" --jq .commit.sha) || { echo "FAILED: $r (write)"; continue; }
+    if [ -n "$old" ]; then head=$(gh api -X DELETE "repos/$r/contents/.github/workflows/commands.yml" -f message="ci: commands.yml folded into the kit's router" \
+      -f branch="$br" -f sha="$old" --jq .commit.sha) || { echo "FAILED: $r (delete commands.yml)"; continue; }; fi
     n=$(gh api "repos/$r/pulls" -f head="$br" -f base=main -f title="ci: pipeline file from the kit template" \
       -f body="Written by pipeline-guardrails scripts/sync.sh: the repo's one pipeline file, identical in every repo. Merged by itself once checks pass." --jq .number) \
       || { echo "FAILED: $r (PR)"; continue; }
@@ -28,7 +28,10 @@ for o in $owners; do
       c=$(gh pr checks "$n" -R "$r" --json name,bucket --jq '[.[] | select(.name | test("checks / checks$"))][0].bucket' 2>/dev/null)
       [ -n "$c" ] && [ "$c" != pending ] && break; sleep 20
     done
-    if [ "${c:-}" = pass ] && gh pr merge "$n" -R "$r" --squash --delete-branch >/dev/null 2>&1; then echo "synced: $r"
+    # Merge only exactly what this script wrote: same head commit, and no file but the two pipeline files
+    files=$(gh pr view "$n" -R "$r" --json files --jq '[.files[].path] | sort | join(" ")')
+    if [ "${c:-}" = pass ] && [[ " .github/workflows/commands.yml .github/workflows/pipeline.yml .github/workflows/pipeline.yml " == *" $files "* ]] \
+       && gh pr merge "$n" -R "$r" --squash --delete-branch --match-head-commit "$head" >/dev/null 2>&1; then echo "synced: $r"
     else echo "FAILED: $r#$n (checks ${c:-did not finish})"; fi
   done
 done
