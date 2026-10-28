@@ -17,6 +17,7 @@ check "keys.sh without arguments fails" bash -c '! scripts/keys.sh'
 check "the repo pipeline file holds no logic (only the router call)" bash -c '[ $(grep -c "uses:" templates/.github/workflows/pipeline.yml) -eq 1 ] && ! grep -q "if:" templates/.github/workflows/pipeline.yml'
 check "no second repo workflow template" test ! -e templates/.github/workflows/commands.yml
 check "local-checks.sh reads the script list from checks.yml" bash -c 'grep -q "for s in [a-z ]*; do # the one list" .github/workflows/checks.yml'
+check "sync.sh runs on the Mac's bash 3.2 (no arrays)" bash -c '! grep -qE "\\[@\\]|\\[\\*\\]|=\\(\\)" scripts/sync.sh'
 check "approve.sh without arguments fails" bash -c '! scripts/approve.sh 2>/dev/null'
 # secret hooks: a fake key is caught, clean text passes untouched
 check "scrub hook redacts a key" bash -c '[[ $1 == *"[REDACTED_"* && $1 != *"$2"* ]]' _ "$(scrub "token $fake here")" "$fake"
