@@ -155,14 +155,15 @@ jobs:
             + fold("🧹 Nitpicks"; .nits)
             + fold("Pre-existing issues"; .pre_existing)
           ' <<<"$OUT")
-          gh pr comment "$PR" --body "$body"
-
-          # Resolve only Claude's own threads that it reports as fixed
+          # Claude's own threads that it reports as fixed: the gate resolves them (resolving needs a
+          # contents:write token, which this job must not hold while Claude runs in it)
+          fixed=""
           for id in $(jq -r '.fixed_threads // [] | .[]' <<<"$OUT"); do
             prefix=$([ "$KIND" = security ] && echo "**🔒 Security:**" || echo "**⚠️ Important:**")
-            jq -e --arg id "$id" --arg p "$prefix" 'any(.[]; .id == $id and (.body | startswith($p)))' <<<"$THREADS" >/dev/null || continue
-            gh api graphql -f query='mutation($t:ID!){resolveReviewThread(input:{threadId:$t}){thread{id}}}' -F t="$id" >/dev/null
+            jq -e --arg id "$id" --arg p "$prefix" 'any(.[]; .id == $id and (.body | startswith($p)))' <<<"$THREADS" >/dev/null && fixed+=" $id"
           done
+          [ -z "$fixed" ] || body+=$'\n'"<!-- pipeline:resolve$fixed -->"
+          gh pr comment "$PR" --body "$body"
 
           if [ "$KIND" = review ]; then
             risk=$(jq -r .risk <<<"$OUT")

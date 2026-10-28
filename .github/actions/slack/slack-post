@@ -2,10 +2,13 @@
 # The one Slack poster for every pipeline workflow. Token from $SLACK_TOKEN; without it, does nothing.
 # slack-post <channel> <text>            posts; prints "<channel id>:<ts>" so the message can be edited later
 # slack-post <channel id>:<ts> <text>    edits that message instead
+# slack-post --delete <channel id>:<ts>  deletes it (a message that no longer needs Hanna goes, 2026-10-28)
 # Never fails the job: a failed post is a warning.
 [ -n "${SLACK_TOKEN:-}" ] || { echo "No Slack token: not posted." >&2; exit 0; }
-to=$1 text=$2
-if [[ $to == *:* ]]; then api=chat.update
+to=$1 text=${2:-}
+if [ "$to" = --delete ]; then to=$2 api=chat.delete
+  data=$(jq -n --arg c "${to%%:*}" --arg ts "${to#*:}" '{channel: $c, ts: $ts}')
+elif [[ $to == *:* ]]; then api=chat.update
   data=$(jq -n --arg c "${to%%:*}" --arg ts "${to#*:}" --arg t "$text" '{channel: $c, ts: $ts, text: $t}')
 else api=chat.postMessage
   data=$(jq -n --arg c "$to" --arg t "$text" '{channel: $c, text: $t}')
