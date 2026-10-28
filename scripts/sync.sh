@@ -67,11 +67,11 @@ for o in $owners; do
   if [ "$o" = hanna-fmw ]; then q="user/repos?affiliation=owner&per_page=100"; else q="orgs/$o/repos?per_page=100"; fi
   for r in $(gh api --paginate "$q" --jq '.[] | select(.archived | not) | .full_name'); do
     [ -n "$(raw "$r" .github/workflows/pipeline.yml)" ] || continue # no pipeline: not a pipeline repo
-    stale="" gone=""
-    for f in $MANAGED; do [ "$(raw "$r" "$f")" = "$(cat "templates/$f")" ] || stale="$stale $f=templates/$f"; done
+    stale="" names="" gone=""
+    for f in $MANAGED; do [ "$(raw "$r" "$f")" = "$(cat "templates/$f")" ] || { stale="$stale $f=templates/$f"; names="$names $f"; }; done
     for f in $RETIRED; do [ -z "$(sha "$r" "$f" main)" ] || gone="$gone $f"; done
     [ -z "$stale$gone" ] && continue
-    [ "${1:-}" = --check ] && { echo "differs: $r ($(sed 's#=templates/[^ ]*##g' <<<"$stale")$gone )"; continue; }
+    [ "${1:-}" = --check ] && { echo "differs: $r ($names$gone )"; continue; }
     deliver "$r" ci/pipeline-sync "ci: kit-managed files from pipeline-guardrails" "$stale" "$gone" && echo "synced: $r"
   done
 done
