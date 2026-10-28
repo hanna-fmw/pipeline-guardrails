@@ -44,7 +44,7 @@ jobs:
       - name: Lint, types, tests, build
         if: steps.pm.outputs.pm != 'none'
         run: |
-          for s in lint typecheck test build; do
+          for s in lint typecheck test build; do # the one list of package scripts; scripts/local-checks.sh reads this line
             if jq -e --arg s "$s" '.scripts[$s]' package.json >/dev/null; then
               echo "::group::$s"; ${{ steps.pm.outputs.pm }} run "$s"; echo "::endgroup::"
             else
