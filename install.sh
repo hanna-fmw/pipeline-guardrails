@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Put the pipeline into a repo: install.sh <repo-folder>
-# Copies the templates (the pipeline file always; never overwrites your own REVIEW.md, PR template or Claude settings),
+# Writes the kit-managed files (sync.sh --list), seeds the repo's own REVIEW.md and Dependabot config once,
 # sets the GitHub repo to squash-only merges, and sets the Claude and Slack secrets from Infisical.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")" && pwd)/templates"
@@ -8,10 +8,10 @@ repo="$(cd "${1:?usage: install.sh <repo-folder>}" && pwd)"
 cd "$repo"
 slug=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
 
-for f in .github/workflows/pipeline.yml .github/dependabot.yml \
-         .github/pull_request_template.md REVIEW.md .claude/settings.json; do
-  if [ -e "$f" ] && [ "$f" != .github/workflows/pipeline.yml ]; then
-    echo "kept    $f (already exists)"
+managed=$("$(dirname "$kit")/scripts/sync.sh" --list) # the kit's files: always written, kept in step by sync.sh
+for f in $managed .github/dependabot.yml REVIEW.md; do
+  if [ -e "$f" ] && ! grep -qx "$f" <<<"$managed"; then
+    echo "kept    $f (the repo's own)"
   else
     mkdir -p "$(dirname "$f")"; cp "$kit/$f" "$f"; echo "wrote   $f"
   fi

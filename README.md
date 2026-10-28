@@ -46,6 +46,10 @@ It writes the one pipeline file (identical in every repo, it only calls `router.
 3. Add the project's checks as package.json scripts: `lint`, `typecheck`, `test`, `build`.
 4. Fill in `REVIEW.md`: what failure looks like here, what is always high risk, what to skip.
 
+## What a repo holds
+
+Kit-managed (`scripts/sync.sh --list`): written by `install.sh`, never edited in the repo, and put back by `sync.sh`, which the daily check runs, through a PR it merges itself. The pipeline file only calls `router.yml`, so a kit change never needs a repo change. The repo's own (seeded once, then the repo's): `REVIEW.md`, `.github/dependabot.yml`, the opt-in `backup.yml`, and the repo variable `PIPELINE_DEPTH`.
+
 ## Versions
 
 Repos pin a release, never `main`: `@v1` moves to each new v1.x.y, so fixes reach every repo while a breaking change (v2) waits until each repo moves on purpose. Every commit on `main` that passes the self-test (`selftest.yml`: the checks workflow on this repo plus `tests/run.sh`) is released by itself as the next patch version, with notes; `scripts/release.sh vX.Y.Z` is only for a minor or major bump. Which repo pins what, and who is behind, shows in bb (Components), through the system register's daily check.
