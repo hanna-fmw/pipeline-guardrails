@@ -14,6 +14,7 @@ scan() { jq -n --arg m "$1" '{last_assistant_message: $m}' | bash $h/scan-final-
 check "slack-post without a token exits 0" env -u SLACK_TOKEN .github/actions/slack/slack-post system hi
 # keys.sh: no arguments prints usage and fails
 check "keys.sh without arguments fails" bash -c '! scripts/keys.sh'
+check "approve.sh without arguments fails" bash -c '! scripts/approve.sh 2>/dev/null'
 # secret hooks: a fake key is caught, clean text passes untouched
 check "scrub hook redacts a key" bash -c '[[ $1 == *"[REDACTED_"* && $1 != *"$2"* ]]' _ "$(scrub "token $fake here")" "$fake"
 check "scrub hook leaves clean output alone" test -z "$(scrub "nothing here")"
