@@ -3,9 +3,22 @@
 # slack-post <channel> <text>            posts; prints "<channel id>:<ts>" so the message can be edited later
 # slack-post <channel id>:<ts> <text>    edits that message instead
 # slack-post --delete <channel id>:<ts>  deletes it (a message that no longer needs Hanna goes, 2026-10-28)
+# slack-post --clear <channel> <text>    deletes this bot's recent messages there that contain <text>
+#                                        (an alert whose problem is gone goes; no "fixed" post)
 # Never fails the job: a failed post is a warning.
 [ -n "${SLACK_TOKEN:-}" ] || { echo "No Slack token: not posted." >&2; exit 0; }
 to=$1 text=${2:-}
+api() { printf 'header = "Authorization: Bearer %s"\n' "$SLACK_TOKEN" | curl -sS -K - "https://slack.com/api/$1" || true; }
+if [ "$to" = --clear ]; then
+  me=$(api auth.test | jq -r '.bot_id // empty' 2>/dev/null)
+  id=$(api "conversations.list?exclude_archived=true&limit=1000&types=public_channel" | jq -r --arg n "${2#\#}" '.channels[]? | select(.name == $n) | .id' 2>/dev/null)
+  [ -n "$me" ] && [ -n "$id" ] || { echo "::warning::Slack clear: channel or bot not found" >&2; exit 0; }
+  for ts in $(api "conversations.history?channel=$id&limit=200" | jq -r --arg me "$me" --arg t "$3" \
+      '.messages[]? | select(.bot_id == $me and ((.text // "") | contains($t))) | .ts' 2>/dev/null); do
+    "$0" --delete "$id:$ts" >/dev/null
+  done
+  exit 0
+fi
 if [ "$to" = --delete ]; then to=$2 api=chat.delete
   data=$(jq -n --arg c "${to%%:*}" --arg ts "${to#*:}" '{channel: $c, ts: $ts}')
 elif [[ $to == *:* ]]; then api=chat.update

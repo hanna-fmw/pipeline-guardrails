@@ -170,6 +170,14 @@ jobs:
             echo "storage/$b: $(rclone size "${ROOT}storage/$b" | tr '\n' ' ')"
           done
 
+      - name: A good run takes back the last failure's Slack line
+        if: success()
+        uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@v1
+        with:
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          channel: ${{ inputs.slack_channel }}
+          clear: "Backup failed: ${{ github.repository }}"
+
       - name: Say it failed
         if: failure()
         uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@v1

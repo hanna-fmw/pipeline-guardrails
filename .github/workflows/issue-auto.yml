@@ -4,6 +4,7 @@
 #   mode: run  works through the waiting issues one at a time (the caller queues it per repo, never cancels).
 #              It adds `ai:working` on start. If no PR comes out, both labels come off and Slack gets a 🔴 line;
 #              an issue that keeps `ai:working` is stuck, which the local runner checks for.
+#   mode: clear  the issue was edited, relabelled or closed: its 🔴 NO PR line leaves Slack (no "fixed" post).
 name: issue-auto
 on:
   workflow_call:
@@ -47,6 +48,26 @@ jobs:
           is-admin "$SENDER" || { echo "Not a repo admin; ignoring."; exit 0; }
           b64=$(jq -n --arg t "$TITLE" --arg b "$BODY" '{title: $t, body: $b}' | base64 -w0)
           gh issue comment "$ISSUE" --body "<!-- ai:auto-pin $b64 -->"$'\n'"Queued for Claude by @$SENDER. Claude works from the text as it is now; later edits are not seen."
+
+  clear:
+    if: inputs.mode == 'clear'
+    runs-on: ubuntu-latest
+    steps:
+      - id: nopr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          gh api "repos/$GH_REPO/issues/$ISSUE/comments" --paginate --jq '.[] | select(.user.login == "github-actions[bot]") | .body' \
+            | grep -q '^Claude finished without opening a PR' || exit 0
+          echo "text=${{ github.server_url }}/$GH_REPO/issues/$ISSUE|" >> "$GITHUB_OUTPUT"
+      - if: steps.nopr.outputs.text != ''
+        uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@v1
+        with:
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          channel: ${{ inputs.slack_channel }}
+          clear: ${{ steps.nopr.outputs.text }}
 
   pick:
     if: inputs.mode == 'run'

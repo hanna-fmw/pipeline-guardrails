@@ -1,5 +1,5 @@
 # The one Slack step for pipeline workflows (build-system foundation plan: one procedure each).
-#   With text: posts it, with a link to the run.
+#   With text: posts it, with a link to the run. With clear: deletes this bot's messages there containing it.
 #   Always: puts slack-post on PATH, for workflows that post or edit from a script (the gate).
 # uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@v1
 name: slack
@@ -12,6 +12,8 @@ inputs:
     default: system
   text:
     default: ""
+  clear:
+    default: ""
 runs:
   using: composite
   steps:
@@ -20,7 +22,9 @@ runs:
         SLACK_TOKEN: ${{ inputs.token }}
         C: ${{ inputs.channel }}
         TEXT: ${{ inputs.text }}
+        CLEAR: ${{ inputs.clear }}
         RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       run: |
         echo "$GITHUB_ACTION_PATH" >> "$GITHUB_PATH"
         [ -z "$TEXT" ] || "$GITHUB_ACTION_PATH/slack-post" "$C" "$TEXT · <$RUN|run>" >/dev/null
+        [ -z "$CLEAR" ] || "$GITHUB_ACTION_PATH/slack-post" --clear "$C" "$CLEAR"

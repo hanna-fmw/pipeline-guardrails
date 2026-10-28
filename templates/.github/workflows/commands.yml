@@ -14,7 +14,7 @@ on:
   pull_request:
     types: [labeled, closed]
   issues:
-    types: [opened, labeled]
+    types: [opened, labeled, edited, closed]
 
 jobs:
   fix:
@@ -53,6 +53,21 @@ jobs:
     uses: hanna-fmw/pipeline-guardrails/.github/workflows/issue-auto.yml@v1
     with:
       mode: pin
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+
+  auto-clear: # an issue that got no PR: its Slack line goes once the issue is edited, relabelled or closed
+    if: >-
+      github.event_name == 'issues'
+      && (github.event.action == 'edited' || github.event.action == 'closed' || github.event.label.name == 'ai:auto')
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/issue-auto.yml@v1
+    with:
+      mode: clear
+    secrets:
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
     permissions:
       contents: write
       pull-requests: write
