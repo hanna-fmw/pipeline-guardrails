@@ -11,6 +11,11 @@
 #            With <base file> (what the caller read and rendered from), refuses if the repo's copy changed since.
 # Every PR is merged only when its checks pass, at the exact commit written, touching only the files it wrote.
 set -uo pipefail # plain strings, no arrays: the Mac runs bash 3.2, where an empty array is "unbound"
+case "${1:-}" in
+  ""|--check|--list|--put) ;;
+  --help|-h) sed -n '2,/^set /p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
+  *) echo "FAILED: unknown option ${1} (--help lists them); nothing done"; exit 64 ;; # never a repair on a typo
+esac
 cd "$(dirname "$0")/.." || exit 1
 MANAGED=".github/workflows/pipeline.yml .github/pull_request_template.md .claude/settings.json"
 RETIRED=".github/workflows/commands.yml"

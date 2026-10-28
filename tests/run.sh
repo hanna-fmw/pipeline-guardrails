@@ -19,6 +19,8 @@ check "no second repo workflow template" test ! -e templates/.github/workflows/c
 check "local-checks.sh reads the script list from checks.yml" bash -c 'grep -q "for s in [a-z ]*; do # the one list" .github/workflows/checks.yml'
 check "sync.sh runs on the Mac's bash 3.2 (no arrays)" bash -c '! grep -qE "\\[@\\]|\\[\\*\\]|=\\(\\)" scripts/sync.sh'
 check "sync.sh --put refuses a kit-managed path" bash -c 'echo x > /tmp/put.$$; ! scripts/sync.sh --put any/repo .claude/settings.json /tmp/put.$$ >/dev/null; r=$?; rm -f /tmp/put.$$; exit $r'
+check "sync.sh refuses an unknown flag before any work" bash -c 'scripts/sync.sh --chek >/dev/null; [ $? -eq 64 ]'
+check "sync.sh --help prints usage and does nothing" bash -c 'scripts/sync.sh --help | grep -q "Usage: sync.sh"'
 check "approve.sh without arguments fails" bash -c '! scripts/approve.sh 2>/dev/null'
 # secret hooks: a fake key is caught, clean text passes untouched
 check "scrub hook redacts a key" bash -c '[[ $1 == *"[REDACTED_"* && $1 != *"$2"* ]]' _ "$(scrub "token $fake here")" "$fake"

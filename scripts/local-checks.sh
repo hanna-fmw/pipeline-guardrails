@@ -3,6 +3,7 @@
 # the one list), so fmw-ship proves a change locally exactly as CI will. Prints each command's last lines.
 # Usage: local-checks.sh   (in the repo; exits non-zero on the first failure)
 set -uo pipefail
+[ $# -eq 0 ] || { [ "$1" = --help ] && { sed -n '2,4p' "$0" | sed 's/^# //'; exit 0; }; echo "FAILED: local-checks.sh takes no options (--help)"; exit 64; }
 kit="$(cd "$(dirname "$0")/.." && pwd)"
 list=$(grep -oE 'for s in [a-z ]+; do # the one list' "$kit/.github/workflows/checks.yml" | sed -E 's/for s in ([a-z ]+); do.*/\1/')
 [ -n "$list" ] || { echo "FAILED: could not read the script list from checks.yml"; exit 1; }
