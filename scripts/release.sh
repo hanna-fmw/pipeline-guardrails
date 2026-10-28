@@ -1,5 +1,6 @@
 #!/bin/bash
-# Releases the kit: tags main as vX.Y.Z and moves the major tag (v1) that every repo pins.
+# Minor or major releases of the kit (patch releases happen by themselves: selftest.yml's release job).
+# Tags main as vX.Y.Z and moves the major tag (v1) that every repo pins.
 # Refuses unless main is pushed and selftest passed on that exact commit. Writes the release notes (the changelog).
 # Usage: release.sh vX.Y.Z      (a breaking change is a new major: v2.0.0, then repos move one by one)
 set -euo pipefail
