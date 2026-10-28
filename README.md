@@ -24,7 +24,7 @@ The one written-down flow; skills, rules and other docs point here instead of re
 
 1. The pipeline runs; Slack shows the PR only once it needs the owner (green and waiting, or only approval missing).
 2. The owner says yes. The session that made the PR then runs `scripts/approve.sh <owner/repo> <pr> [its worktree]`, the one way to act on that yes. The yes covers the latest commit only; any push removes the label.
-3. It adds `owner-approved`, which re-runs the gate (`commands.yml`); the gate merges a green PR. If the gate is green but its token may not merge (a PR that changes workflow files), `approve.sh` merges. Not green: it prints what is missing.
+3. It adds `owner-approved`, which re-runs the gate (`commands.yml`); the gate merges a green PR. Not merged within 15 minutes: it says so, and the gate comment on the PR says why. A PR that changes workflow files cannot be merged by the gate's token (and its own workflows could fake a green check), so the owner presses **Squash and merge** there.
 4. Deploy: the host (Vercel, Railway) deploys `main` on its own; nothing to run.
 5. Cleanup: the branch is deleted on merge, `Closes #N` issues close, the Slack message is deleted, and `approve.sh` removes the worktree it was given.
 6. Something wrong after merge: `/revert` on the PR.
