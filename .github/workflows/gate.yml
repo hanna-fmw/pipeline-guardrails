@@ -115,7 +115,11 @@ jobs:
           [ "$open" -eq 0 ] || blockers+=("$open unresolved review thread(s). Fix (or reply \`@claude fix this\`), or answer with a reason and resolve.")
 
           # 3. Up to date with main (stand-in for a merge queue)
-          [ "$(jq -r .mergeStateStatus <<<"$pr")" != BEHIND ] || blockers+=("Branch is behind \`main\`. Use **Update branch** so checks run on the combined code.")
+          #    Behind: the gate brings it up to date itself; the new commit runs the pipeline again.
+          if [ "$(jq -r .mergeStateStatus <<<"$pr")" = BEHIND ]; then
+            if gh pr update-branch "$PR" >/dev/null 2>&1; then blockers+=("Branch was behind \`main\`: updated it; the checks run again on the combined code.")
+            else blockers+=("Branch is behind \`main\` and conflicts with it. Comment \`@claude bring this PR up to date with main\`."); fi
+          fi
 
           # 4. Risk tier: from the review bot's own summary comment (labels can be set by anyone with write access).
           #    No review of this exact commit (e.g. rounds capped) means at least medium.

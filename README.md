@@ -16,7 +16,7 @@ A pull-request pipeline for small teams that let AI agents write code, modelled 
 | Rollback | `revert.yml` | `/revert` on a merged PR opens the undo PR |
 | Dependencies | `templates/.github/dependabot.yml` | weekly grouped npm updates, monthly action updates |
 
-Depth per repo: `quick`, `standard` (2 hunters, 1 verifier each) or `deep` (4 hunters, 3 voting verifiers), set in the repo's `pipeline.yml`.
+Depth per repo: `quick`, `standard` (2 hunters, 1 verifier each) or `deep` (4 hunters, 3 voting verifiers), set by the repo variable `PIPELINE_DEPTH` (default `standard`).
 
 ## Approving a PR
 
@@ -24,7 +24,7 @@ The one written-down flow; skills, rules and other docs point here instead of re
 
 1. The pipeline runs; Slack shows the PR only once it needs the owner (green and waiting, or only approval missing).
 2. The owner says yes. The session that made the PR then runs `scripts/approve.sh <owner/repo> <pr> [its worktree]`, the one way to act on that yes. The yes covers the latest commit only; any push removes the label.
-3. It adds `owner-approved`, which re-runs the gate (`commands.yml`); the gate merges a green PR. Not merged within 15 minutes: it says so, and the gate comment on the PR says why. A PR that changes workflow files cannot be merged by the gate's token (and its own workflows could fake a green check), so the owner presses **Squash and merge** there.
+3. It adds `owner-approved`, which re-runs the gate; the gate merges a green PR. Not merged within 15 minutes: it says so, and the gate comment on the PR says why. A PR that changes workflow files cannot be merged by the gate's token (and its own workflows could fake a green check), so the owner presses **Squash and merge** there.
 4. Deploy: the host (Vercel, Railway) deploys `main` on its own; nothing to run.
 5. Cleanup: the branch is deleted on merge, `Closes #N` issues close, the Slack message is deleted, and `approve.sh` removes the worktree it was given.
 6. Something wrong after merge: `/revert` on the PR.
@@ -39,7 +39,7 @@ What the CI/CD baseline still lacks lives as [issues labelled `roadmap`](https:/
 ./install.sh <repo-folder>
 ```
 
-It copies two small trigger workflows plus a PR template, `REVIEW.md`, Dependabot config and the Claude format hook, then sets the repo to squash-only merges. Existing `REVIEW.md`, PR template and Claude settings are kept. One-time setup:
+It writes the one pipeline file (identical in every repo, it only calls `router.yml` here, so nothing in a repo ever needs updating) plus a PR template, `REVIEW.md`, Dependabot config and the Claude format hook, then sets the repo to squash-only merges. Existing `REVIEW.md`, PR template and Claude settings are kept. One-time setup:
 
 1. Install the [Claude GitHub App](https://github.com/apps/claude) on the repo.
 2. `claude setup-token`, then save the token once in Infisical (project `personal`, env `dev`, folder `/github`, name `CLAUDE_CODE_OAUTH_TOKEN`). The installer copies it into the repo's secret without showing it. Reviews then run on your Claude subscription, not per-token billing.

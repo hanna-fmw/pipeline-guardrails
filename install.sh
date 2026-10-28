@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Put the pipeline into a repo: install.sh <repo-folder>
-# Copies the templates (never overwrites your own REVIEW.md, PR template or Claude settings),
+# Copies the templates (the pipeline file always; never overwrites your own REVIEW.md, PR template or Claude settings),
 # sets the GitHub repo to squash-only merges, and sets the Claude and Slack secrets from Infisical.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")" && pwd)/templates"
@@ -8,14 +8,15 @@ repo="$(cd "${1:?usage: install.sh <repo-folder>}" && pwd)"
 cd "$repo"
 slug=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
 
-for f in .github/workflows/pipeline.yml .github/workflows/commands.yml .github/dependabot.yml \
+for f in .github/workflows/pipeline.yml .github/dependabot.yml \
          .github/pull_request_template.md REVIEW.md .claude/settings.json; do
-  if [ -e "$f" ] && [ "$f" != .github/workflows/pipeline.yml ] && [ "$f" != .github/workflows/commands.yml ]; then
+  if [ -e "$f" ] && [ "$f" != .github/workflows/pipeline.yml ]; then
     echo "kept    $f (already exists)"
   else
     mkdir -p "$(dirname "$f")"; cp "$kit/$f" "$f"; echo "wrote   $f"
   fi
 done
+git rm -q --ignore-unmatch .github/workflows/commands.yml # folded into the kit's router (2026-10-28)
 git add -f .claude/settings.json # global gitignores often hide .claude/; this file is meant to be shared
 
 gh repo edit "$slug" --enable-squash-merge --enable-merge-commit=false --enable-rebase-merge=false \

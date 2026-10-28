@@ -1,56 +1,27 @@
-# Runs on every pull request: checks, Claude bug review and Claude security review in parallel, then the gate.
-# The recipes live in hanna-fmw/pipeline-guardrails; this file only says which ones to run.
+# The PR pipeline and its commands. Never edit: this file is the same in every repo and only calls the kit,
+# where every rule lives (hanna-fmw/pipeline-guardrails, router.yml). install.sh writes it; the daily
+# check compares it with the kit's and scripts/sync.sh puts it back. Per-repo setting: repo variable
+# PIPELINE_DEPTH (quick | standard | deep, default standard).
 name: pipeline
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-
-concurrency:
-  group: pipeline-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+    types: [opened, synchronize, reopened, ready_for_review, labeled, closed]
+  pull_request_review_comment:
+    types: [created]
+  issue_comment:
+    types: [created]
+  issues:
+    types: [opened, labeled, edited, closed]
 
 jobs:
-  checks:
-    uses: hanna-fmw/pipeline-guardrails/.github/workflows/checks.yml@v1
-    permissions:
-      contents: read
-
-  review:
-    uses: hanna-fmw/pipeline-guardrails/.github/workflows/claude-review.yml@v1
-    with:
-      kind: review
-      depth: standard # quick | standard | deep
+  run:
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/router.yml@v1
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-    permissions:
-      contents: read
-      pull-requests: write
-      issues: write
-      id-token: write
-
-  security:
-    uses: hanna-fmw/pipeline-guardrails/.github/workflows/claude-review.yml@v1
-    with:
-      kind: security
-    secrets:
-      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-    permissions:
-      contents: read
-      pull-requests: write
-      issues: write
-      id-token: write
-
-  gate:
-    needs: [checks, review, security]
-    if: always()
-    uses: hanna-fmw/pipeline-guardrails/.github/workflows/gate.yml@v1
-    with:
-      pr: ${{ github.event.pull_request.number }}
-      new_commits: ${{ github.event.action == 'synchronize' }}
-    secrets:
       SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
     permissions:
       contents: write
       pull-requests: write
       issues: write
+      id-token: write
       checks: read
