@@ -10,13 +10,24 @@ A pull-request pipeline for small teams that let AI agents write code, modelled 
 | Required checks | `checks.yml` | lint, typecheck, test, build (whichever scripts exist), workflow and shell-script lint, vulnerable packages, leaked secrets in the PR's commits |
 | Claude review | `claude-review.yml` (kind: review) | a plain-English summary of what the PR does and what to try before merging, parallel bug hunters, a verifier per finding, inline comments for confirmed bugs, nits and pre-existing issues in a summary, risk label |
 | Security review | `claude-review.yml` (kind: security) | same shape, security problems only |
-| Convergence | both reviews | round 1 reads the whole PR, later rounds only new commits, never repeats a finding, resolves its own fixed threads, stops after 3 rounds |
+| Convergence | both reviews | round 1 reads the whole PR, later rounds only new commits, never repeats a finding, marks its own fixed threads (the gate resolves them), stops after 3 rounds |
 | Gate | `gate.yml` | one check: green checks, every thread resolved, up to date with main, owner-approved label for medium and high risk (removed on every push), CI files and CODEOWNERS paths always high; green low-risk PRs (docs/tests only) merge themselves |
 | Fix | `claude-fix.yml` | `@claude <what to do>` on a PR: Claude pushes the change and the pipeline runs again; in an issue: Claude does it and opens the PR |
 | Rollback | `revert.yml` | `/revert` on a merged PR opens the undo PR |
 | Dependencies | `templates/.github/dependabot.yml` | weekly grouped npm updates, monthly action updates |
 
 Depth per repo: `quick`, `standard` (2 hunters, 1 verifier each) or `deep` (4 hunters, 3 voting verifiers), set in the repo's `pipeline.yml`.
+
+## Approving a PR
+
+The one written-down flow; skills, rules and other docs point here instead of repeating it.
+
+1. The pipeline runs; Slack shows the PR only once it needs the owner (green and waiting, or only approval missing).
+2. The owner says yes. The session that made the PR then runs `scripts/approve.sh <owner/repo> <pr> [its worktree]`, the one way to act on that yes. The yes covers the latest commit only; any push removes the label.
+3. It adds `owner-approved`, which re-runs the gate (`commands.yml`); the gate merges a green PR. If the gate is green but its token may not merge (a PR that changes workflow files), `approve.sh` merges. Not green: it prints what is missing.
+4. Deploy: the host (Vercel, Railway) deploys `main` on its own; nothing to run.
+5. Cleanup: the branch is deleted on merge, `Closes #N` issues close, the Slack message is deleted, and `approve.sh` removes the worktree it was given.
+6. Something wrong after merge: `/revert` on the PR.
 
 ## Roadmap
 
