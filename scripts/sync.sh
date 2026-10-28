@@ -12,13 +12,14 @@ MANAGED=".github/workflows/pipeline.yml .github/pull_request_template.md .claude
 RETIRED=".github/workflows/commands.yml"
 br=ci/pipeline-sync
 [ "${1:-}" = --list ] && { tr ' ' '\n' <<<"$MANAGED"; exit 0; }
-raw() { gh api -H "Accept: application/vnd.github.raw" "repos/$1/contents/$2" 2>/dev/null; }
-sha() { gh api "repos/$1/contents/$2?ref=$3" --jq .sha 2>/dev/null; }
+# gh prints GitHub's error body on stdout too, so a missing file must give empty output, never that body
+raw() { local c; c=$(gh api -H "Accept: application/vnd.github.raw" "repos/$1/contents/$2" 2>/dev/null) && printf '%s' "$c"; }
+sha() { local s; s=$(gh api "repos/$1/contents/$2?ref=$3" --jq .sha 2>/dev/null) && printf '%s' "$s"; }
 owners=$(cd "$(paths get ops)" && python3 -m lib.config OWN_OWNERS) || { echo "FAILED: could not read OWN_OWNERS"; exit 1; }
 for o in $owners; do
   if [ "$o" = hanna-fmw ]; then q="user/repos?affiliation=owner&per_page=100"; else q="orgs/$o/repos?per_page=100"; fi
   for r in $(gh api --paginate "$q" --jq '.[] | select(.archived | not) | .full_name'); do
-    raw "$r" .github/workflows/pipeline.yml >/dev/null || continue # no pipeline: not a pipeline repo
+    [ -n "$(raw "$r" .github/workflows/pipeline.yml)" ] || continue # no pipeline: not a pipeline repo
     stale="" gone=""
     for f in $MANAGED; do [ "$(raw "$r" "$f")" = "$(cat "templates/$f")" ] || stale="$stale $f"; done
     for f in $RETIRED; do [ -z "$(sha "$r" "$f" main)" ] || gone="$gone $f"; done
