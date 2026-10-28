@@ -1,0 +1,6 @@
+#!/bin/bash
+# is-admin <user>: succeeds when <user> is an admin of this repo (the owner on a personal repo, an org admin on an org repo).
+# The one admin check for every pipeline workflow. Needs GH_TOKEN.
+p=$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$1/permission" --jq .permission 2>/dev/null || echo none)
+echo "$1 has $p access." >&2
+[ "$p" = admin ]
