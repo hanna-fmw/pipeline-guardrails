@@ -48,7 +48,7 @@ It copies two small trigger workflows plus a PR template, `REVIEW.md`, Dependabo
 
 ## Versions
 
-Repos pin a release, never `main`: `@v1` moves to each new v1.x.y, so fixes reach every repo while a breaking change (v2) waits until each repo moves on purpose. `scripts/release.sh vX.Y.Z` tags only a commit the self-test (`selftest.yml`: the checks workflow on this repo plus `tests/run.sh`) passed. Which repo pins what, and who is behind, shows in bb (Components), through the system register's daily check.
+Repos pin a release, never `main`: `@v1` moves to each new v1.x.y, so fixes reach every repo while a breaking change (v2) waits until each repo moves on purpose. Every commit on `main` that passes the self-test (`selftest.yml`: the checks workflow on this repo plus `tests/run.sh`) is released by itself as the next patch version, with notes; `scripts/release.sh vX.Y.Z` is only for a minor or major bump. Which repo pins what, and who is behind, shows in bb (Components), through the system register's daily check.
 
 ## Backups (projects with a database)
 
