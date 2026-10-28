@@ -33,7 +33,8 @@ gh label create ai:pair -R "$slug" --color 1D76DB --description "An agent works 
 gh label create ai:working -R "$slug" --color FBCA04 --description "An agent is working on it now" --force >/dev/null
 echo "set     labels ai:auto, ai:pair, ai:working"
 
-# Keys come from Infisical project "personal", env dev, folder /github (scripts/keys.sh)
-"$(dirname "$kit")/scripts/keys.sh" to-github "$slug" f45535b0-69ef-422f-a292-9cfefd4bdbc1 dev /github \
+# Keys come from Infisical project "personal" (its id lives in ops config), env dev, folder /github (scripts/keys.sh)
+pid=$(cd "$(paths get ops)" && python3 -m lib.config INFISICAL_PROJECT)
+"$(dirname "$kit")/scripts/keys.sh" to-github "$slug" "$pid" dev /github \
   CLAUDE_CODE_OAUTH_TOKEN SLACK_BOT_TOKEN || echo "        (Claude token: 'claude setup-token'; Slack: the agents bot token)"
 echo "TODO    Claude GitHub App must have access to $slug: https://github.com/apps/claude"

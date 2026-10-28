@@ -1,0 +1,23 @@
+# The one "is this user a repo admin" check for pipeline workflows.
+#   Output ok: true when `user` (default: who started the run) is an admin.
+#   Always: puts is-admin on PATH, for workflows that check someone else from a script (the gate).
+# uses: hanna-fmw/pipeline-guardrails/.github/actions/admin@v1
+name: admin
+description: Check that a user is a repo admin, or make is-admin available to later steps
+inputs:
+  user:
+    default: ${{ github.actor }}
+outputs:
+  ok:
+    value: ${{ steps.check.outputs.ok }}
+runs:
+  using: composite
+  steps:
+    - id: check
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        U: ${{ inputs.user }}
+      run: |
+        echo "$GITHUB_ACTION_PATH" >> "$GITHUB_PATH"
+        echo "ok=$("$GITHUB_ACTION_PATH/is-admin" "$U" && echo true || echo false)" >> "$GITHUB_OUTPUT"

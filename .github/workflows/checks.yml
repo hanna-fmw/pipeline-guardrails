@@ -1,4 +1,4 @@
-# Required checks: lint, types, tests, build, workflow and shell lint, leaked secrets, vulnerable packages.
+# Required checks: lint, types, tests, build, workflow, shell and Python lint, leaked secrets, vulnerable packages.
 # Runs whichever of the package.json scripts lint / typecheck / test / build exist.
 name: checks
 on:
@@ -52,7 +52,7 @@ jobs:
             fi
           done
 
-      - name: Workflow and shell script lint
+      - name: Workflow, shell and Python lint
         run: |
           if compgen -G ".github/workflows/*.y*ml" >/dev/null; then
             f=actionlint_1.7.12_linux_amd64.tar.gz
@@ -61,8 +61,11 @@ jobs:
             tar -xzf "$f" actionlint
             SHELLCHECK_OPTS="-e SC2016" ./actionlint -color # same exception as the shell-script lint below
           fi
-          mapfile -t sh < <(git ls-files '*.sh')
+          # Shell scripts: *.sh plus extensionless files whose first line is a sh/bash shebang
+          mapfile -t sh < <(git ls-files -z | while IFS= read -r -d '' f; do
+            case ${f##*/} in *.sh) echo "$f" ;; *.*) ;; *) [ -f "$f" ] && head -1 "$f" | grep -qE '^#!.*\b(ba)?sh\b' && echo "$f" ;; esac; done)
           [ ${#sh[@]} -eq 0 ] || shellcheck -e SC2016 "${sh[@]}" # SC2016: '$x' in single quotes is usually meant (GraphQL, jq)
+          if [ -n "$(git ls-files '*.py')" ]; then pipx run ruff==0.17.0 check .; fi
 
       - name: Vulnerable packages (high and critical, production only)
         if: steps.pm.outputs.pm != 'none'

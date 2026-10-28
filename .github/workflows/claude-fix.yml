@@ -22,13 +22,7 @@ jobs:
       ok: ${{ steps.check.outputs.ok }}
     steps:
       - id: check
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ACTOR: ${{ github.actor }}
-        run: |
-          p=$(gh api "repos/${{ github.repository }}/collaborators/$ACTOR/permission" --jq .permission 2>/dev/null || echo none)
-          echo "$ACTOR has $p access."
-          echo "ok=$([ "$p" = admin ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        uses: hanna-fmw/pipeline-guardrails/.github/actions/admin@v1
 
   claude:
     needs: admin

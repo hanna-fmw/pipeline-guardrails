@@ -41,10 +41,10 @@ jobs:
       TITLE: ${{ github.event.issue.title }}
       BODY: ${{ github.event.issue.body }}
     steps:
+      - uses: hanna-fmw/pipeline-guardrails/.github/actions/admin@v1 # puts is-admin on PATH
       - run: |
           [ "$SENDER" = "${{ inputs.owner }}" ] || { echo "Label added by $SENDER, not ${{ inputs.owner }}; ignoring."; exit 0; }
-          p=$(gh api "repos/$GH_REPO/collaborators/$SENDER/permission" --jq .permission 2>/dev/null || echo none)
-          [ "$p" = admin ] || { echo "$SENDER is not a repo admin; ignoring."; exit 0; }
+          is-admin "$SENDER" || { echo "Not a repo admin; ignoring."; exit 0; }
           b64=$(jq -n --arg t "$TITLE" --arg b "$BODY" '{title: $t, body: $b}' | base64 -w0)
           gh issue comment "$ISSUE" --body "<!-- ai:auto-pin $b64 -->"$'\n'"Queued for Claude by @$SENDER. Claude works from the text as it is now; later edits are not seen."
 
