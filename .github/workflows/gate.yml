@@ -6,9 +6,8 @@
 #     which is removed on every new push, so an approval covers one commit only
 #   - CI files and paths listed in CODEOWNERS always count as high
 #   - a green PR merges itself when low-risk (docs/tests only, Claude agrees) or owner-approved, unless auto_merge is false
-#   - Slack (optional SLACK_BOT_TOKEN secret): one message per PR in #pull-requests, edited as the PR moves.
-#     Same dots as every Slack post (Hanna 2026-10-19): 🔴 act now, 🟡 look when you can, 🟢 nothing to do, ⚪ closed.
-#     (needs you -> ready -> merged/closed), so finished PRs never sit there looking open
+#   - Slack (optional SLACK_BOT_TOKEN secret): a message in #pull-requests only while a PR needs Hanna (green and
+#     waiting for her merge or approval); deleted as soon as it doesn't, and when the PR is merged or closed.
 # On free private repos GitHub cannot lock the merge button: merge only when this check is green.
 name: gate
 on:
@@ -76,6 +75,7 @@ jobs:
             ref=$(slack-post "${sref:-${{ inputs.slack_channel }}}" "$text")
             [ -n "$sref" ] || sref=$ref
           }
+          unslack() { [ -z "$sref" ] || slack-post --delete "$sref"; sref=; }
           # A merge made by this workflow's token does not close "Closes #N" issues, so close them here
           close_linked() {
             for n in $(gh pr view "$PR" --json closingIssuesReferences --jq '.closingIssuesReferences[] | select("\(.repository.owner.login)/\(.repository.name)" | ascii_downcase == (env.GH_REPO | ascii_downcase)) | .number'); do
@@ -85,8 +85,8 @@ jobs:
           }
           case "$(jq -r .state <<<"$pr")" in
             OPEN) ;;
-            MERGED) close_linked; [ -z "$sref" ] || slack "🟢 MERGED:"; exit 0 ;;
-            *) [ -z "$sref" ] || slack "⚪ CLOSED:"; exit 0 ;;
+            MERGED) close_linked; unslack; exit 0 ;;
+            *) unslack; exit 0 ;;
           esac
           head=$(jq -r .headRefOid <<<"$pr")
           labels=$(jq -r '.labels[].name' <<<"$pr")
@@ -103,7 +103,13 @@ jobs:
           [ "$(jq length <<<"$runs")" -gt 0 ] || blockers+=("No checks have run on the latest commit yet.")
           [ -z "$failed" ] || blockers+=("Failing checks: $failed (see the **Checks** tab).")
 
-          # 2. Every review thread answered
+          # 2. Every review thread answered. First resolve the threads the review bot reported fixed
+          #    (only github-actions[bot] can write that marker; this job holds the token resolving needs).
+          for t in $(gh api "repos/$GH_REPO/issues/$PR/comments" --paginate \
+              --jq '.[] | select(.user.login == "github-actions[bot]") | .body | capture("<!-- pipeline:resolve (?<ids>[^>]*) -->") | .ids'); do
+            gh api graphql -f query='mutation($t:ID!){resolveReviewThread(input:{threadId:$t}){thread{id}}}' -F t="$t" >/dev/null 2>&1 \
+              || echo "::warning::Could not resolve review thread $t"
+          done
           open=$(gh api graphql -f query='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){reviewThreads(first:100){nodes{isResolved}}}}}' \
             -F o="${GH_REPO%/*}" -F r="${GH_REPO#*/}" -F n="$PR" --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved | not)] | length')
           [ "$open" -eq 0 ] || blockers+=("$open unresolved review thread(s). Fix (or reply \`@claude fix this\`), or answer with a reason and resolve.")
@@ -175,18 +181,15 @@ jobs:
             msg="**Merge gate: blocked** · risk $risk"$'\n\n'"$(printf -- '- [ ] %s\n' "${blockers[@]}")"
           fi
           echo "$msg" >> "$GITHUB_STEP_SUMMARY"
-          # Slack: post when the owner is needed; after that, keep editing the same message
-          case $state in
-            merged) note="🟢 MERGED:" ;;
-            ready) note="🟡 PR:" ;;
-            # Owner needed and nothing failing: ping now, even while a slow check (e.g. Vercel) still runs
-            # Failing checks: red, so a broken agent PR never sits unseen
-            *) note=$([ -n "$failed" ] && echo "🔴 FAILING:" || { [ "${waiting_for_owner:-}" = true ] && echo "🟡 PR:"; } || echo "") ;;
-          esac
-          prev=$(jq -r '.body // ""' <<<"$old" | sed 1,2d)
-          if [ "$prev" != "$msg" ]; then
-            if [ -n "$note" ]; then slack "$note"
-            elif [ -n "$sref" ]; then slack "🟡 PR:"; fi
+          # Slack shows only what needs Hanna now (2026-10-28): a PR that is green and waits for her merge,
+          # or whose only missing piece is her approval (a slow check may still run). Failing, behind or
+          # threads open is the agent's job (the fix loop), never a post. A message that no longer applies,
+          # and every merged or closed PR, is deleted, not edited.
+          rest=$(printf '%s\n' "${blockers[@]}" | grep -cvE '^(Owner approval required|Checks still running)' || true)
+          if [ "$state" = ready ] || { [ "$state" = blocked ] && [ -z "$failed" ] && [ "${waiting_for_owner:-}" = true ] && [ "$rest" -eq 0 ]; }; then
+            [ -n "$sref" ] || slack "🟡 PR:"
+          else
+            unslack
           fi
           body="<!-- pipeline:gate -->"$'\n'"<!-- slack=${sref:-} -->"$'\n'"$msg"
           if [ -n "$id" ]; then gh api -X PATCH "repos/$GH_REPO/issues/comments/$id" -f body="$body" >/dev/null
