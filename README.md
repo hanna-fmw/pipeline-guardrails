@@ -51,9 +51,7 @@ Private repos on the free plan cannot lock the merge button (rulesets need GitHu
 
 | # | Module | Covers |
 |---|---|---|
-| 01 | [secrets-and-env](modules/01-secrets-and-env/) | `.env` strategy, secret-manager references, key rotation |
 | 06 | [claude-guardrails](modules/06-claude-guardrails/) | Claude Code hooks that block secrets and PII before they enter transcripts |
-| 08 | [agent-boundaries](modules/08-agent-boundaries/) | Agent permissions, sandboxed workspaces, MCP and plugin admission |
 
 ## Keeping it working
 
