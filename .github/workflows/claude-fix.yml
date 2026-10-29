@@ -32,16 +32,14 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # full history, so Claude can merge main into the branch
-      - uses: anthropics/claude-code-action@v1
+      - uses: hanna-fmw/pipeline-guardrails/.github/actions/claude@v1 # the AI rules, written once
         timeout-minutes: 30 # runs take 1-8 min (2026-10-24); a stuck one stops and says so below
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          settings: '{"attribution":{"commit":"","pr":""},"includeCoAuthoredBy":false}' # no attribution lines (her Git rule)
-          trigger_phrase: "@claude"
-          claude_args: |
+          token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          deny: "Read(.git/**),Edit(.git/**),Write(.git/**),Edit(.github/**),Write(.github/**),Bash(git commit --no-verify:*),Bash(git * --output*),Bash(git * --ext-diff*),Bash(git * --no-index*),Bash(git -c *),Bash(git * -c *)"
+          instructions: "When you were called from an issue, finish by opening the pull request yourself with gh pr create: fill in .github/pull_request_template.md and put 'Closes #<issue number>' in the description. To bring a PR branch up to date: git fetch origin main, git merge origin/main, resolve the conflicts by editing the files, commit, push. You cannot run the tests here; the checks run on GitHub after your push, so read failing test output from the PR's Checks and fix the code."
+          args: |
             --allowedTools "Edit,Write,Read,Glob,Grep,Bash(git fetch origin main),Bash(git merge origin/main),Bash(git merge --no-edit origin/main),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*),Bash(gh pr create:*)"
-            --disallowedTools "Read(.env*),Edit(.env*),Write(.env*),Read(**/.env*),Edit(**/.env*),Write(**/.env*),Read(.git/**),Edit(.git/**),Write(.git/**),Edit(.github/**),Write(.github/**),Bash(git commit --no-verify:*),Bash(git * --output*),Bash(git * --ext-diff*),Bash(git * --no-index*),Bash(git -c *),Bash(git * -c *)"
-            --append-system-prompt "Swedish text uses real å, ä, ö. Never add Co-authored-by or any other attribution trailer. When you were called from an issue, finish by opening the pull request yourself with gh pr create: fill in .github/pull_request_template.md and put 'Closes #<issue number>' in the description. To bring a PR branch up to date: git fetch origin main, git merge origin/main, resolve the conflicts by editing the files, commit, push. You cannot run the tests here; the checks run on GitHub after your push, so read failing test output from the PR's Checks and fix the code."
       - name: Say where it stopped
         if: failure()
         env:

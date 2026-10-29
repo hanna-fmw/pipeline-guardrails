@@ -134,14 +134,12 @@ jobs:
         id: claude
         continue-on-error: true
         timeout-minutes: 30 # runs take 1-8 min (2026-10-24); a stuck one stops and gets the "no PR" Slack line below
-        uses: anthropics/claude-code-action@v1
+        uses: hanna-fmw/pipeline-guardrails/.github/actions/claude@v1 # the AI rules, written once
         with:
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          settings: '{"attribution":{"commit":"","pr":""},"includeCoAuthoredBy":false}' # no attribution lines (her Git rule)
-          claude_args: |
-            --append-system-prompt "Swedish text uses real å, ä, ö. Never add Co-authored-by or any other attribution trailer."
+          token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          deny: "Edit(.git/**),Write(.git/**),Edit(.github/**),Write(.github/**),Bash(git commit --no-verify:*),Bash(git log --output:*),Bash(git diff --output:*)"
+          args: |
             --allowedTools "Edit,Write,Read,Glob,Grep,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git switch -c:*),Bash(git checkout -b:*),Bash(git add:*),Bash(git commit:*),Bash(git push origin ai/issue-${{ matrix.issue }}),Bash(git push -u origin ai/issue-${{ matrix.issue }}),Bash(gh pr create:*)"
-            --disallowedTools "Read(.env*),Edit(.env*),Write(.env*),Read(**/.env*),Edit(**/.env*),Write(**/.env*),Edit(.git/**),Write(.git/**),Edit(.github/**),Write(.github/**),Bash(git commit --no-verify:*),Bash(git log --output:*),Bash(git diff --output:*)"
           prompt: |
             Do issue #${{ matrix.issue }} in this repo. The task, exactly as the owner approved it:
 

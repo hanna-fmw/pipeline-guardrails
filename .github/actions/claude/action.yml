@@ -1,0 +1,39 @@
+# The one Claude step for pipeline workflows: the AI rules live here, written once.
+#   Always: .env files denied, no attribution lines, the Swedish/no-trailer line.
+#   Inputs add to them per workflow: deny (more disallowed tools), instructions (more prompt), args (the rest).
+# uses: hanna-fmw/pipeline-guardrails/.github/actions/claude@v1
+name: claude
+description: Run Claude Code with the pipeline's AI rules
+inputs:
+  token:
+    required: true
+  prompt:
+    default: ""
+  trigger_phrase:
+    default: "@claude"
+  allowed_bots:
+    default: ""
+  deny:
+    default: ""
+  instructions:
+    default: ""
+  args:
+    default: ""
+outputs:
+  structured_output:
+    value: ${{ steps.claude.outputs.structured_output }}
+runs:
+  using: composite
+  steps:
+    - id: claude
+      uses: anthropics/claude-code-action@v1
+      with:
+        claude_code_oauth_token: ${{ inputs.token }}
+        settings: '{"attribution":{"commit":"","pr":""},"includeCoAuthoredBy":false}' # no attribution lines (her Git rule)
+        prompt: ${{ inputs.prompt }}
+        trigger_phrase: ${{ inputs.trigger_phrase }}
+        allowed_bots: ${{ inputs.allowed_bots }}
+        claude_args: |
+          --disallowedTools "Read(.env*),Edit(.env*),Write(.env*),Read(**/.env*),Edit(**/.env*),Write(**/.env*)${{ inputs.deny && format(',{0}', inputs.deny) || '' }}"
+          --append-system-prompt "Swedish text uses real å, ä, ö. Never add Co-authored-by or any other attribution trailer.${{ inputs.instructions && format(' {0}', inputs.instructions) || '' }}"
+          ${{ inputs.args }}
