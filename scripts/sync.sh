@@ -9,10 +9,11 @@
 #   --put <owner/repo> <path> <local file> [<base file>]   one PR writing that file at that path (ops' generated
 #            files; the kit never holds their text). Refuses a managed path; does nothing when it already matches.
 #            With <base file> (what the caller read and rendered from), refuses if the repo's copy changed since.
+#   --drop <owner/repo> <path> [<base file>]   the same, removing that file (nothing to do when it is absent).
 # Every PR is merged only when its checks pass, at the exact commit written, touching only the files it wrote.
 set -uo pipefail # plain strings, no arrays: the Mac runs bash 3.2, where an empty array is "unbound"
 case "${1:-}" in
-  ""|--check|--list|--put) ;;
+  ""|--check|--list|--put|--drop) ;;
   --help|-h) sed -n '2,/^set /p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
   *) echo "FAILED: unknown option ${1} (--help lists them); nothing done"; exit 64 ;; # never a repair on a typo
 esac
@@ -58,6 +59,15 @@ deliver() {
   echo "FAILED: $r#$n (merge refused)"; return 1
 }
 
+if [ "${1:-}" = --drop ]; then
+  r=${2:?usage: sync.sh --drop <owner/repo> <path> [<base file>]} f=${3:?path} base=${4:-}
+  grep -qxF "$f" <(tr ' ' '\n' <<<"$MANAGED $RETIRED") && { echo "FAILED: $f is kit-managed; sync.sh owns it"; exit 1; }
+  [ -n "$(raw "$r" .github/workflows/pipeline.yml)" ] || { echo "FAILED: $r has no pipeline; commit there directly"; exit 1; }
+  [ -n "$(sha "$r" "$f" main)" ] || { echo "same: $r $f (absent)"; exit 0; }
+  [ -z "$base" ] || [ "$(raw "$r" "$f")" = "$(cat "$base")" ] || { echo "FAILED: $r $f changed since it was read"; exit 1; }
+  deliver "$r" "ci/put-$(tr -c 'a-zA-Z0-9\n' - <<<"$f")" "ci: drop $f (generated)" "" "$f" && echo "dropped: $r $f"
+  exit $?
+fi
 if [ "${1:-}" = --put ]; then
   r=${2:?usage: sync.sh --put <owner/repo> <path> <local file> [<base file>]} f=${3:?path} src=${4:?local file} base=${5:-}
   [ -f "$src" ] || { echo "FAILED: no file $src"; exit 1; }

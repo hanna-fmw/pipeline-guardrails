@@ -127,10 +127,13 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          settings: '{"attribution":{"commit":"","pr":""},"includeCoAuthoredBy":false}' # no attribution lines (her Git rule)
           allowed_bots: claude # PRs Claude opens from ai:auto issues or @claude get reviewed too
           prompt: ${{ steps.prep.outputs.prompt }}
           claude_args: |
             --allowedTools "Read,Grep,Glob,Task,Agent,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),mcp__github_inline_comment__create_inline_comment"
+            --disallowedTools "Read(.env*),Edit(.env*),Write(.env*),Read(**/.env*),Edit(**/.env*),Write(**/.env*)"
+            --append-system-prompt "Swedish text uses real å, ä, ö. Never add Co-authored-by or any other attribution trailer."
             --json-schema '{"type":"object","properties":{"important":{"type":"integer"},"nits":{"type":"array","items":{"type":"string"}},"pre_existing":{"type":"array","items":{"type":"string"}},"risk":{"type":"string","enum":["low","medium","high"]},"risk_reason":{"type":"string"},"explain":{"type":"string"},"walkthrough":{"type":"array","items":{"type":"object","properties":{"file":{"type":"string"},"change":{"type":"string"}},"required":["file","change"]}},"fixed_threads":{"type":"array","items":{"type":"string"}},"summary":{"type":"string"}},"required":["important","risk","summary"]}'
 
       - name: Post the round summary and risk label

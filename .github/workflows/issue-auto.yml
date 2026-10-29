@@ -137,9 +137,11 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          settings: '{"attribution":{"commit":"","pr":""},"includeCoAuthoredBy":false}' # no attribution lines (her Git rule)
           claude_args: |
+            --append-system-prompt "Swedish text uses real å, ä, ö. Never add Co-authored-by or any other attribution trailer."
             --allowedTools "Edit,Write,Read,Glob,Grep,Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git switch -c:*),Bash(git checkout -b:*),Bash(git add:*),Bash(git commit:*),Bash(git push origin ai/issue-${{ matrix.issue }}),Bash(git push -u origin ai/issue-${{ matrix.issue }}),Bash(gh pr create:*)"
-            --disallowedTools "Edit(.git/**),Write(.git/**),Edit(.github/**),Write(.github/**),Bash(git commit --no-verify:*),Bash(git log --output:*),Bash(git diff --output:*)"
+            --disallowedTools "Read(.env*),Edit(.env*),Write(.env*),Read(**/.env*),Edit(**/.env*),Write(**/.env*),Edit(.git/**),Write(.git/**),Edit(.github/**),Write(.github/**),Bash(git commit --no-verify:*),Bash(git log --output:*),Bash(git diff --output:*)"
           prompt: |
             Do issue #${{ matrix.issue }} in this repo. The task, exactly as the owner approved it:
 

@@ -173,7 +173,9 @@ jobs:
           # Green and (low risk, or owner approved): merge. GitHub refuses this token on PRs that change workflow files.
           can_merge=$( { [ "$risk" = low ] && [ "$author" != "app/dependabot" ]; } || [ "$approved" = true ] && echo true || echo false)
           if [ ${#blockers[@]} -eq 0 ] && [ "$can_merge" = true ] && [ "${{ inputs.auto_merge }}" = true ] \
-             && gh pr merge "$PR" --squash --match-head-commit "$head"; then
+             && gh pr merge "$PR" --squash --match-head-commit "$head" --subject "$(jq -r .title <<<"$pr") (#$PR)" \
+                  --body "$(gh pr view "$PR" --json body --jq .body | grep -viE '^(co-authored-by|signed-off-by):' || true)"; then
+            # the squash message is set here: GitHub's default copies every branch commit's Co-authored-by into main
             state=merged
             close_linked
             msg="**Merge gate: merged** · risk $risk"$'\n\n'"All checks passed and all threads are resolved$([ "$approved" = true ] && echo "; owner approved"). Merged automatically. Comment \`/revert\` to undo."
