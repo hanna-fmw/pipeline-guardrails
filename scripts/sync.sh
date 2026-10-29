@@ -53,9 +53,11 @@ deliver() {
   # Merge only exactly what was written: same head commit, no file outside the ones this call wrote or dropped
   extra=$(gh pr view "$n" -R "$r" --json files --jq '.files[].path' | grep -vxF -f <(tr ' ' '\n' <<<"$allowed") || true)
   [ "${c:-}" = pass ] && [ -z "$extra" ] || { echo "FAILED: $r#$n (checks ${c:-did not finish}${extra:+, unexpected files})"; return 1; }
+  # The gate merges a low-risk or light-mode PR itself once checks pass: give it 2 minutes first, so the two never race
+  merged() { [ "$(gh pr view "$n" -R "$r" --json state,headRefOid --jq 'select(.headRefOid == "'"$head"'") | .state')" = MERGED ]; }
+  for _ in $(seq 12); do merged && return 0; sleep 10; done
   gh pr merge "$n" -R "$r" --squash --delete-branch --match-head-commit "$head" >/dev/null 2>&1 && return 0
-  # A docs-only change is low risk, so the gate may have merged it first: that is success, not a failure
-  [ "$(gh pr view "$n" -R "$r" --json state,headRefOid --jq 'select(.headRefOid == "'"$head"'") | .state')" = MERGED ] && return 0
+  sleep 10; merged && return 0
   echo "FAILED: $r#$n (merge refused)"; return 1
 }
 
