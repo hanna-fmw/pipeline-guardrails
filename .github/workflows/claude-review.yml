@@ -120,6 +120,7 @@ jobs:
             echo 'PROMPT_END'
           } >> "$GITHUB_OUTPUT"
 
+      - uses: hanna-fmw/pipeline-guardrails/.github/actions/rules@v1 # the shared rules (rules/shared.md)
       - name: Claude ${{ inputs.kind }}
         id: claude
         if: steps.prep.outputs.skip != 'true'
