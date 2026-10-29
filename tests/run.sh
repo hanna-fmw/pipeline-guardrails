@@ -21,6 +21,8 @@ check "sync.sh runs on the Mac's bash 3.2 (no arrays)" bash -c '! grep -qE "\\[@
 check "sync.sh --put refuses a kit-managed path" bash -c 'echo x > /tmp/put.$$; ! scripts/sync.sh --put any/repo .claude/settings.json /tmp/put.$$ >/dev/null; r=$?; rm -f /tmp/put.$$; exit $r'
 check "sync.sh refuses an unknown flag before any work" bash -c 'scripts/sync.sh --chek >/dev/null; [ $? -eq 64 ]'
 check "sync.sh --help prints usage and does nothing" bash -c 'scripts/sync.sh --help | grep -q "Usage: sync.sh"'
+check "every Claude step denies .env files and sets attribution off" bash -c 'for f in .github/workflows/*.yml; do c=$(grep -c "anthropics/claude-code-action@" "$f"); [ "$c" = 0 ] && continue; [ "$(grep -c "Read(.env\*)" "$f")" = "$c" ] && [ "$(grep -c "\"attribution\"" "$f")" = "$c" ] || exit 1; done'
+check "sync.sh --drop refuses a kit-managed path" bash -c '! scripts/sync.sh --drop any/repo .claude/settings.json >/dev/null'
 check "approve.sh without arguments fails" bash -c '! scripts/approve.sh 2>/dev/null'
 # secret hooks: a fake key is caught, clean text passes untouched
 check "scrub hook redacts a key" bash -c '[[ $1 == *"[REDACTED_"* && $1 != *"$2"* ]]' _ "$(scrub "token $fake here")" "$fake"
