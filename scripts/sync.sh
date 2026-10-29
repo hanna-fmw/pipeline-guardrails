@@ -30,20 +30,21 @@ deliver() {
   main=$(gh api "repos/$r/git/ref/heads/main" --jq .object.sha) || { echo "FAILED: $r (no main)"; return 1; }
   gh api -X DELETE "repos/$r/git/refs/heads/$br" >/dev/null 2>&1
   gh api "repos/$r/git/refs" -f ref="refs/heads/$br" -f sha="$main" >/dev/null || { echo "FAILED: $r (branch)"; return 1; }
+  drop_branch() { gh api -X DELETE "repos/$r/git/refs/heads/$br" >/dev/null 2>&1; } # a failed write never leaves a stray branch
   for w in $writes; do
     f=${w%%=*} src=${w#*=} allowed="$allowed $f"
     old=$(sha "$r" "$f" "$br") # empty for a new file; GitHub then ignores the sha field
     head=$(gh api -X PUT "repos/$r/contents/$f" -f message="ci: $f" -f branch="$br" \
-      -f content="$(base64 < "$src" | tr -d '\n')" ${old:+-f sha="$old"} --jq .commit.sha) || { echo "FAILED: $r (write $f)"; return 1; }
+      -f content="$(base64 < "$src" | tr -d '\n')" ${old:+-f sha="$old"} --jq .commit.sha) || { echo "FAILED: $r (write $f)"; drop_branch; return 1; }
   done
   for f in $drops; do
     allowed="$allowed $f"
     head=$(gh api -X DELETE "repos/$r/contents/$f" -f message="ci: drop $f" -f branch="$br" -f sha="$(sha "$r" "$f" "$br")" --jq .commit.sha) \
-      || { echo "FAILED: $r (drop $f)"; return 1; }
+      || { echo "FAILED: $r (drop $f)"; drop_branch; return 1; }
   done
   n=$(gh api "repos/$r/pulls" -f head="$br" -f base=main -f title="$title" \
     -f body="Written by pipeline-guardrails scripts/sync.sh:$allowed. Merged by itself once checks pass." --jq .number) \
-    || { echo "FAILED: $r (PR)"; return 1; }
+    || { echo "FAILED: $r (PR)"; drop_branch; return 1; }
   for _ in $(seq 60); do
     c=$(gh pr checks "$n" -R "$r" --json name,bucket --jq '[.[] | select(.name | test("checks / checks$"))][0].bucket' 2>/dev/null)
     [ -n "$c" ] && [ "$c" != pending ] && break; sleep 20
