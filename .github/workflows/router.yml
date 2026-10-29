@@ -1,5 +1,6 @@
 # The whole pipeline, routed by event: PR checks, both Claude reviews, the gate, and the commands
-# (@claude, /gate, /revert, ai:auto, owner-approved). Every repo's .github/workflows/pipeline.yml only
+# (@claude, /gate, /revert, ai:auto, owner-approved). Repo variable PIPELINE_MODE=light: checks only, no Claude
+# reviews, and the gate merges a green PR by itself. Every repo's .github/workflows/pipeline.yml only
 # calls this file, the same in every repo (templates/.github/workflows/pipeline.yml), so a change here
 # reaches every repo with the next release and no repo file ever changes.
 name: router
@@ -22,7 +23,7 @@ jobs:
       contents: read
 
   review:
-    if: github.event_name == 'pull_request' && contains(fromJSON('["opened","synchronize","reopened","ready_for_review"]'), github.event.action)
+    if: github.event_name == 'pull_request' && contains(fromJSON('["opened","synchronize","reopened","ready_for_review"]'), github.event.action) && vars.PIPELINE_MODE != 'light' # light mode: checks only
     concurrency:
       group: review-${{ github.event.pull_request.number }}
       cancel-in-progress: true
@@ -39,7 +40,7 @@ jobs:
       id-token: write
 
   security:
-    if: github.event_name == 'pull_request' && contains(fromJSON('["opened","synchronize","reopened","ready_for_review"]'), github.event.action)
+    if: github.event_name == 'pull_request' && contains(fromJSON('["opened","synchronize","reopened","ready_for_review"]'), github.event.action) && vars.PIPELINE_MODE != 'light' # light mode: checks only
     concurrency:
       group: security-${{ github.event.pull_request.number }}
       cancel-in-progress: true

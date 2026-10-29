@@ -16,7 +16,7 @@ A pull-request pipeline for small teams that let AI agents write code, modelled 
 | Rollback | `revert.yml` | `/revert` on a merged PR opens the undo PR |
 | Dependencies | `templates/.github/dependabot.yml` | weekly grouped npm updates, monthly action updates |
 
-Depth per repo: `quick`, `standard` (2 hunters, 1 verifier each) or `deep` (4 hunters, 3 voting verifiers), set by the repo variable `PIPELINE_DEPTH` (default `standard`).
+Mode per repo: the repo variable `PIPELINE_MODE=light` runs the checks only (no Claude review or security review), and the gate merges a green PR by itself, except CI files and CODEOWNERS paths, which still need the owner. Unset means the full pipeline. Depth per repo: `quick`, `standard` (2 hunters, 1 verifier each) or `deep` (4 hunters, 3 voting verifiers), set by the repo variable `PIPELINE_DEPTH` (default `standard`).
 
 ## Approving a PR
 
