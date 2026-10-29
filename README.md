@@ -46,10 +46,6 @@ It writes the one pipeline file (identical in every repo, it only calls `router.
 3. Add the project's checks as package.json scripts: `lint`, `typecheck`, `test`, `build`.
 4. Fill in `REVIEW.md`: what failure looks like here, what is always high risk, what to skip.
 
-## Shared rules
-
-`rules/shared.md` is the one home of the rules every agent follows in these repos, also without the owner's machine. Every Claude step (review, security, `@claude`, `ai:auto`) loads it first through `.github/actions/rules`, as the runner's `~/.claude/CLAUDE.md`; cloud setup scripts fetch the same file raw. No repo holds a copy.
-
 ## What a repo holds
 
 Kit-managed (`scripts/sync.sh --list`): written by `install.sh`, never edited in the repo, and put back by `sync.sh`, which the daily check runs, through a PR it merges itself. The pipeline file only calls `router.yml`, so a kit change never needs a repo change. The repo's own (seeded once, then the repo's): `REVIEW.md`, `.github/dependabot.yml`, the opt-in `backup.yml`, and the repo variable `PIPELINE_DEPTH`.

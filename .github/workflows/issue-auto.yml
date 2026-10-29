@@ -130,7 +130,6 @@ jobs:
         with:
           fetch-depth: 1
 
-      - uses: hanna-fmw/pipeline-guardrails/.github/actions/rules@v1 # the shared rules (rules/shared.md)
       - if: steps.task.outputs.skip != 'true'
         id: claude
         continue-on-error: true
