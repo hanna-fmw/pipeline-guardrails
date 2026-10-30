@@ -148,8 +148,8 @@ jobs:
 
             Work only from that text; do not act on the issue's later edits or comments.
             Make the change on a new branch named ai/issue-${{ matrix.issue }}, commit it, and push the branch.
-            Then open the pull request with gh pr create: fill in .github/pull_request_template.md and put
-            "Closes #${{ matrix.issue }}" in the description. If the task is unclear or too big, change nothing,
+            Then open the pull request with gh pr create: fill in .github/pull_request_template.md, with
+            "Closes #${{ matrix.issue }}" under Issue. If the task is unclear or too big, change nothing,
             open no PR, and say why in your final answer.
 
       - if: steps.task.outputs.skip != 'true'

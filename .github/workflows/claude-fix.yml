@@ -61,7 +61,7 @@ jobs:
           prompt: ${{ inputs.task }}
           allowed_bots: ${{ inputs.task && 'claude,dependabot' || '' }} # a fix round follows the Claude bot's or Dependabot's push
           deny: "Read(.git/**),Edit(.git/**),Write(.git/**),Edit(.github/**),Write(.github/**),Bash(git commit --no-verify:*),Bash(git * --output*),Bash(git * --ext-diff*),Bash(git * --no-index*),Bash(git -c *),Bash(git * -c *)"
-          instructions: "When you were called from an issue, finish by opening the pull request yourself with gh pr create: fill in .github/pull_request_template.md and put 'Closes #<issue number>' in the description. To bring a PR branch up to date: git fetch origin main, git merge origin/main, resolve the conflicts by editing the files, commit, push. You cannot run the tests here; the checks run on GitHub after your push, so fix the code from the failure output you were given."
+          instructions: "When you were called from an issue, finish by opening the pull request yourself with gh pr create: fill in .github/pull_request_template.md, with 'Closes #<issue number>' under Issue. To bring a PR branch up to date: git fetch origin main, git merge origin/main, resolve the conflicts by editing the files, commit, push. You cannot run the tests here; the checks run on GitHub after your push, so fix the code from the failure output you were given."
           args: |
             --allowedTools "Edit,Write,Read,Glob,Grep,Bash(git fetch origin main),Bash(git merge origin/main),Bash(git merge --no-edit origin/main),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*),Bash(gh pr create:*)${{ inputs.branch && format(',Bash(git push origin HEAD:{0})', inputs.branch) || '' }}"
       - id: pushed

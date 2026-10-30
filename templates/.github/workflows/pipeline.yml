@@ -5,7 +5,7 @@
 name: pipeline
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, labeled, closed]
+    types: [opened, synchronize, reopened, ready_for_review, labeled, edited, closed]
   pull_request_review_comment:
     types: [created]
   issue_comment:
