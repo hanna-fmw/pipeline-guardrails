@@ -84,7 +84,7 @@ jobs:
             label="🔒 Security"
             risk="Always return risk: low (the bug review sets the tier)."
           else
-            focus="Look for real bugs: logic errors, broken edge cases, changes that break something elsewhere in the repo, a fix that misses the root cause, and clear breaks of a rule in CLAUDE.md or REVIEW.md that you can quote. Skip style, formatting and anything a linter catches."
+            focus="Look for real bugs: logic errors, broken edge cases, changes that break something elsewhere in the repo, a fix that misses the root cause, and clear breaks of a rule in CLAUDE.md or REVIEW.md that you can quote. Skip style, formatting and anything a linter catches. Then check the change's consequences; each one that fails is a finding: (1) cleanup: what the change replaces or retires is removed, not left beside it (old files, functions, flags, config, docs); (2) references: nothing in the repo still points at what it renamed, moved or removed (imports, paths, docs, config, scripts); (3) failure handling: every new step that can fail (network, file, external call, parsing) handles or reports the failure, never fails silently; (4) follow-ups: nothing is left open: no new TODO or 'later', no half-done step, nothing the PR description promises that the diff does not do."
             label="⚠️ Important"
             risk="Set the risk tier from the change, not the author. low: docs, copy, tests only, small additive change behind a flag. medium: ordinary product change. high: auth, payments, secrets handling, data deletion or migrations, deploy or CI files, installers and updaters, and anything REVIEW.md lists as high risk."
           fi
