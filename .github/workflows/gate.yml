@@ -213,7 +213,7 @@ jobs:
           # Claude's own PR, red only on checks or review threads: Claude gets the failure and fixes it itself,
           # at most 3 rounds over the PR's life (Hanna, 2026-10-29); then it is hers. Each round leaves a marker comment.
           if { [ "${{ inputs.autofix }}" = true ] || [ "${{ inputs.stalled }}" = true ]; } \
-             && [ "$state" = blocked ] && [[ "$author" =~ ^(app/)?claude$ ]] && [ "$pending" -eq 0 ] && [ -z "${behind:-}" ] \
+             && [ "$state" = blocked ] && [[ "$author" =~ ^(app/)?claude$ ]] && [ "$(jq -r .author.is_bot <<<"$pr")" = true ] && [ "$pending" -eq 0 ] && [ -z "${behind:-}" ] \
              && { [ -n "$failed" ] || [ "$open" -gt 0 ]; }; then
             branch=$(gh pr view "$PR" --json headRefName --jq .headRefName)
             rounds=$(gh api "repos/$GH_REPO/issues/$PR/comments" --paginate \
