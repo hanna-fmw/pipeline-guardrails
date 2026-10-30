@@ -11,12 +11,14 @@
 #            With <base file> (what the caller read and rendered from), refuses if the repo's copy changed since.
 #   --drop <owner/repo> <path> [<base file>]   the same, removing that file (nothing to do when it is absent).
 #   --export <dir>   the released kit's templates into <dir>/templates (install.sh writes a new repo from them)
+#   --retire <owner/repo> <path>   one PR deleting that retired kit file: what her yes in bb's queue runs, since
+#            deleting waits for her (layer review, layer 4); a plain sync only asks
 # The kit's files always come from a clean copy of the released tag v1, what every repo runs, never this checkout
 # (layer review, layer 4): a local edit or an unreleased commit never reaches a repo.
 # Every PR is merged only when its checks pass, at the exact commit written, touching only the files it wrote.
 set -uo pipefail # plain strings, no arrays: the Mac runs bash 3.2, where an empty array is "unbound"
 case "${1:-}" in
-  ""|--check|--list|--put|--drop|--export) ;;
+  ""|--check|--list|--put|--drop|--export|--retire) ;;
   --help|-h) sed -n '2,/^set /p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
   *) echo "FAILED: unknown option ${1} (--help lists them); nothing done"; exit 64 ;; # never a repair on a typo
 esac
@@ -24,7 +26,10 @@ cd "$(dirname "$0")/.." || exit 1
 MANAGED=".github/workflows/pipeline.yml .github/pull_request_template.md .claude/settings.json"
 RETIRED=".github/workflows/commands.yml"
 [ "${1:-}" = --list ] && { tr ' ' '\n' <<<"$MANAGED"; exit 0; }
-released() { git fetch -q --force origin 'refs/tags/v1:refs/tags/v1' && mkdir -p "$1" && git archive v1 templates | tar -x -C "$1"; }
+released() { # fails closed: a managed file missing or empty in the release stops everything
+  git fetch -q --force origin 'refs/tags/v1:refs/tags/v1' && mkdir -p "$1" && git archive v1 templates | tar -x -C "$1" || return 1
+  local f; for f in $MANAGED; do [ -s "$1/templates/$f" ] || { echo "FAILED: $f is missing in the released kit"; return 1; }; done
+}
 if [ "${1:-}" = --export ]; then released "${2:?usage: sync.sh --export <dir>}" || { echo "FAILED: could not read the released kit (v1)"; exit 1; }; exit 0; fi
 # gh prints GitHub's error body on stdout too, so a missing file must give empty output, never that body
 raw() { local c; c=$(gh api -H "Accept: application/vnd.github.raw" "repos/$1/contents/$2" 2>/dev/null) && printf '%s' "$c"; }
@@ -75,6 +80,13 @@ if [ "${1:-}" = --drop ]; then
   deliver "$r" "ci/put-$(tr -c 'a-zA-Z0-9\n' - <<<"$f")" "ci: drop $f (generated)" "" "$f" && echo "dropped: $r $f"
   exit $?
 fi
+if [ "${1:-}" = --retire ]; then
+  r=${2:?usage: sync.sh --retire <owner/repo> <path>} f=${3:?path}
+  grep -qxF "$f" <(tr ' ' '\n' <<<"$RETIRED") || { echo "FAILED: $f is not a retired kit file"; exit 1; }
+  [ -n "$(sha "$r" "$f" main)" ] || { echo "same: $r $f (absent)"; exit 0; }
+  deliver "$r" ci/pipeline-retire "ci: drop retired $f" "" "$f" && echo "dropped: $r $f"
+  exit $?
+fi
 if [ "${1:-}" = --put ]; then
   r=${2:?usage: sync.sh --put <owner/repo> <path> <local file> [<base file>]} f=${3:?path} src=${4:?local file} base=${5:-}
   [ -f "$src" ] || { echo "FAILED: no file $src"; exit 1; }
@@ -100,6 +112,11 @@ for o in $owners; do
     for f in $RETIRED; do [ -z "$(sha "$r" "$f" main)" ] || gone="$gone $f"; done
     [ -z "$stale$gone" ] && continue
     [ "${1:-}" = --check ] && { echo "differs: $r ($names$gone )"; continue; }
-    deliver "$r" ci/pipeline-sync "ci: kit-managed files from pipeline-guardrails" "$stale" "$gone" && echo "synced: $r"
+    [ -z "$stale" ] || { deliver "$r" ci/pipeline-sync "ci: kit-managed files from pipeline-guardrails" "$stale" "" && echo "synced: $r"; }
+    for f in $gone; do # her yes in bb's queue runs the deletion; the same open question is asked only once
+      (cd "$(paths get ops)" && python3 -c 'import sys; from lib import asks; asks.add("pipeline-kit", sys.argv[1], resume=sys.argv[2:])' \
+        "Delete the retired kit file $f in $r?" "$(paths get pipeline-guardrails)/scripts/sync.sh" --retire "$r" "$f") >/dev/null \
+        && echo "asked: $r $f (her yes in bb deletes it)" || echo "FAILED: $r $f (could not ask)"
+    done
   done
 done
