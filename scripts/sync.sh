@@ -138,7 +138,7 @@ canary() {
      && [ "$(wc -l <<<"$gate" | tr -d ' ')" = 1 ] && grep -q '^- \[ \] Owner approval required' <<<"$gate"; then ok=true; fi
   if [ "$ok" = true ]; then
     gh pr close "$n" -R "$c" --delete-branch >/dev/null
-    git tag -fa v1 -m "v1 -> $latest" "$at" && git push -q -f origin v1 || { echo "FAILED: could not move v1 to $latest"; return 1; }
+    if ! { git tag -fa v1 -m "v1 -> $latest" "$at" && git push -q -f origin v1; }; then echo "FAILED: could not move v1 to $latest"; return 1; fi
     echo "canary passed: v1 -> $latest ($c#$n)"
   else
     (cd "$(paths get ops)" && python3 -m lib.notify "Kit $latest failed its canary run in $c#$n, so no repo got it (v1 stays). https://github.com/$c/pull/$n")
