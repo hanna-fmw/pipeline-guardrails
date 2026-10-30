@@ -10,10 +10,13 @@
 #            files; the kit never holds their text). Refuses a managed path; does nothing when it already matches.
 #            With <base file> (what the caller read and rendered from), refuses if the repo's copy changed since.
 #   --drop <owner/repo> <path> [<base file>]   the same, removing that file (nothing to do when it is absent).
+#   --export <dir>   the released kit's templates into <dir>/templates (install.sh writes a new repo from them)
+# The kit's files always come from a clean copy of the released tag v1, what every repo runs, never this checkout
+# (layer review, layer 4): a local edit or an unreleased commit never reaches a repo.
 # Every PR is merged only when its checks pass, at the exact commit written, touching only the files it wrote.
 set -uo pipefail # plain strings, no arrays: the Mac runs bash 3.2, where an empty array is "unbound"
 case "${1:-}" in
-  ""|--check|--list|--put|--drop) ;;
+  ""|--check|--list|--put|--drop|--export) ;;
   --help|-h) sed -n '2,/^set /p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
   *) echo "FAILED: unknown option ${1} (--help lists them); nothing done"; exit 64 ;; # never a repair on a typo
 esac
@@ -21,6 +24,8 @@ cd "$(dirname "$0")/.." || exit 1
 MANAGED=".github/workflows/pipeline.yml .github/pull_request_template.md .claude/settings.json"
 RETIRED=".github/workflows/commands.yml"
 [ "${1:-}" = --list ] && { tr ' ' '\n' <<<"$MANAGED"; exit 0; }
+released() { git fetch -q --force origin 'refs/tags/v1:refs/tags/v1' && mkdir -p "$1" && git archive v1 templates | tar -x -C "$1"; }
+if [ "${1:-}" = --export ]; then released "${2:?usage: sync.sh --export <dir>}" || { echo "FAILED: could not read the released kit (v1)"; exit 1; }; exit 0; fi
 # gh prints GitHub's error body on stdout too, so a missing file must give empty output, never that body
 raw() { local c; c=$(gh api -H "Accept: application/vnd.github.raw" "repos/$1/contents/$2" 2>/dev/null) && printf '%s' "$c"; }
 sha() { local s; s=$(gh api "repos/$1/contents/$2?ref=$3" --jq .sha 2>/dev/null) && printf '%s' "$s"; }
@@ -83,13 +88,15 @@ if [ "${1:-}" = --put ]; then
   exit $?
 fi
 
+rel=$(mktemp -d); trap 'rm -rf "$rel"' EXIT
+released "$rel" || { echo "FAILED: could not read the released kit (v1)"; exit 1; }
 owners=$(cd "$(paths get ops)" && python3 -m lib.config OWN_OWNERS) || { echo "FAILED: could not read OWN_OWNERS"; exit 1; }
 for o in $owners; do
   if [ "$o" = hanna-fmw ]; then q="user/repos?affiliation=owner&per_page=100"; else q="orgs/$o/repos?per_page=100"; fi
   for r in $(gh api --paginate "$q" --jq '.[] | select(.archived | not) | .full_name'); do
     [ -n "$(raw "$r" .github/workflows/pipeline.yml)" ] || continue # no pipeline: not a pipeline repo
     stale="" names="" gone=""
-    for f in $MANAGED; do [ "$(raw "$r" "$f")" = "$(cat "templates/$f")" ] || { stale="$stale $f=templates/$f"; names="$names $f"; }; done
+    for f in $MANAGED; do [ "$(raw "$r" "$f")" = "$(cat "$rel/templates/$f")" ] || { stale="$stale $f=$rel/templates/$f"; names="$names $f"; }; done
     for f in $RETIRED; do [ -z "$(sha "$r" "$f" main)" ] || gone="$gone $f"; done
     [ -z "$stale$gone" ] && continue
     [ "${1:-}" = --check ] && { echo "differs: $r ($names$gone )"; continue; }

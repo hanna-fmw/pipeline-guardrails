@@ -3,12 +3,15 @@
 # Writes the kit-managed files (sync.sh --list), seeds the repo's own REVIEW.md and Dependabot config once,
 # sets the GitHub repo to squash-only merges, and sets the Claude and Slack secrets from Infisical.
 set -euo pipefail
-kit="$(cd "$(dirname "$0")" && pwd)/templates"
+here="$(cd "$(dirname "$0")" && pwd)"
+rel=$(mktemp -d); trap 'rm -rf "$rel"' EXIT
+"$here/scripts/sync.sh" --export "$rel" || exit 1 # the released kit (v1), never this checkout
+kit="$rel/templates"
 repo="$(cd "${1:?usage: install.sh <repo-folder>}" && pwd)"
 cd "$repo"
 slug=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
 
-managed=$("$(dirname "$kit")/scripts/sync.sh" --list) # the kit's files: always written, kept in step by sync.sh
+managed=$("$here/scripts/sync.sh" --list) # the kit's files: always written, kept in step by sync.sh
 for f in $managed .github/dependabot.yml REVIEW.md; do
   if [ -e "$f" ] && ! grep -qx "$f" <<<"$managed"; then
     echo "kept    $f (the repo's own)"
@@ -35,6 +38,6 @@ echo "set     labels ai:auto, ai:working"
 
 # Keys come from Infisical project "personal" (its id lives in ops config), env dev, folder /github (scripts/keys.sh)
 pid=$(cd "$(paths get ops)" && python3 -m lib.config INFISICAL_PROJECT)
-"$(dirname "$kit")/scripts/keys.sh" to-github "$slug" "$pid" dev /github \
+"$here/scripts/keys.sh" to-github "$slug" "$pid" dev /github \
   CLAUDE_CODE_OAUTH_TOKEN SLACK_BOT_TOKEN || echo "        (Claude token: 'claude setup-token'; Slack: the agents bot token)"
 echo "TODO    Claude GitHub App must have access to $slug: https://github.com/apps/claude"
