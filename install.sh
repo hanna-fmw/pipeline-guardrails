@@ -30,9 +30,8 @@ else # an organization can forbid that per repo; /revert then needs the org sett
   echo "TODO    /revert: allow Actions to create PRs in the org's Actions settings"
 fi
 gh label create ai:auto -R "$slug" --color 0E8A16 --description "An agent may do this alone and open a PR" --force >/dev/null
-gh label create ai:pair -R "$slug" --color 1D76DB --description "An agent works on this together with Hanna" --force >/dev/null
 gh label create ai:working -R "$slug" --color FBCA04 --description "An agent is working on it now" --force >/dev/null
-echo "set     labels ai:auto, ai:pair, ai:working"
+echo "set     labels ai:auto, ai:working"
 
 # Keys come from Infisical project "personal" (its id lives in ops config), env dev, folder /github (scripts/keys.sh)
 pid=$(cd "$(paths get ops)" && python3 -m lib.config INFISICAL_PROJECT)
