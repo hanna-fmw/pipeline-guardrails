@@ -1,7 +1,8 @@
 # The `ai:auto` label on an issue: Claude does the work alone and opens a PR that closes the issue.
 #   mode: pin  runs at once. Only the owner's label counts; it saves the issue text as it was at that moment,
 #              so later edits or comments never change the task.
-#   mode: run  works through the waiting issues one at a time (the caller queues it per repo, never cancels).
+#   mode: run  works on that one issue only, never a queue of older ones (Hanna, 2026-10-30: only an issue she
+#              labels herself, at that moment).
 #              It adds `ai:working` on start. If no PR comes out, both labels come off and Slack gets a 🔴 line;
 #              an issue that keeps `ai:working` is stuck, which the local runner checks for.
 #   mode: clear  the issue was edited, relabelled or closed: its 🔴 NO PR line leaves Slack (no "fixed" post).
@@ -80,9 +81,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          # Open ai:auto issues that nobody is working on and that have a pin, oldest first
-          waiting=$(gh issue list --state open --label ai:auto --limit 50 --json number,labels \
-            --jq '[.[] | select([.labels[].name] | index("ai:working") | not) | .number] | sort | .[]')
+          # Only the issue that was just labelled, never older waiting ones
+          waiting=$(gh issue view "${{ github.event.issue.number }}" --json state,labels \
+            --jq 'select(.state == "OPEN" and ([.labels[].name] | index("ai:auto")) and ([.labels[].name] | index("ai:working") | not)) | "${{ github.event.issue.number }}"')
           # ...and whose latest ai:auto label came from the owner, with a pin made after it
           list=()
           for n in $waiting; do
