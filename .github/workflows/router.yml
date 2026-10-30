@@ -166,8 +166,8 @@ jobs:
 
   auto-run:
     needs: auto-pin
-    concurrency: # one issue per repo at a time; later ones wait, never cancel
-      group: ai-auto
+    concurrency: # one run per issue; each label starts only its own issue
+      group: ai-auto-${{ github.event.issue.number }}
       cancel-in-progress: false
     uses: hanna-fmw/pipeline-guardrails/.github/workflows/issue-auto.yml@v1
     with:
