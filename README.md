@@ -18,13 +18,13 @@ A pull-request pipeline for small teams that let AI agents write code, modelled 
 
 Mode per repo: the repo variable `PIPELINE_MODE=light` runs the checks only (no Claude review or security review), and the gate merges a green PR by itself, except CI files and CODEOWNERS paths, which still need the owner. Unset means the full pipeline. Depth per repo: `quick`, `standard` (2 hunters, 1 verifier each) or `deep` (4 hunters, 3 voting verifiers), set by the repo variable `PIPELINE_DEPTH` (default `standard`).
 
-Red PRs fix themselves: when a PR from the repo fails its checks or the Claude review, the gate hands Claude the failure and Claude pushes a fix, at most 3 rounds per PR. After that a Dependabot bump is closed with a comment, and any other PR goes to Slack as one line. No PR stays stuck: once a day, a PR that nothing has run on for 6 hours and that is not in Slack gets its pipeline run again, and if it is still stuck the next day it goes the same way (closed bump, or Slack).
+Red PRs fix themselves: when a PR from the repo fails its checks or the Claude review, the gate hands Claude the failure and Claude pushes a fix, at most 3 rounds per PR. After that a Dependabot bump is closed with a comment, and any other PR is over to the owner. No PR stays stuck: once a day, a PR that nothing has run on for 6 hours and that is not waiting for the owner gets its pipeline run again, and if it is still stuck the next day it goes the same way (closed bump, or over to the owner). Every open PR has one Slack message, edited in place as its state changes (checks running, Claude fixing, ready, waiting for approval, stuck), and deleted on merge or close; it is the only notice about the PR.
 
 ## Approving a PR
 
 The one written-down flow; skills, rules and other docs point here instead of repeating it.
 
-1. The pipeline runs; Slack shows the PR only once it needs the owner (green and waiting, or only approval missing).
+1. The pipeline runs; the PR's one Slack message shows where it stands, and says when it needs the owner (green and waiting, or only approval missing).
 2. The owner says yes. The session that made the PR then runs `scripts/approve.sh <owner/repo> <pr> [its worktree]`, the one way to act on that yes. The yes covers the latest commit only; any push removes the label.
 3. It adds `owner-approved`, which re-runs the gate; the gate merges a green PR. Not merged within 15 minutes: it says so, and the gate comment on the PR says why. A PR that changes workflow files cannot be merged by the gate's token (and its own workflows could fake a green check), so the owner presses **Squash and merge** there.
 4. Deploy: the host (Vercel, Railway) deploys `main` on its own; nothing to run.

@@ -1,6 +1,6 @@
 # Once a day, no PR stays stuck (Hanna, 2026-10-30): an open PR that nothing has run on for 6 hours and that is not
-# in Slack (green and waiting for her, or given up) is stuck. The first time, its pipeline runs again; stuck again
-# on the same commit, it is handed to the gate as stalled, which puts it in Slack (a dependency bump is closed).
+# waiting for her (the gate marks ready, waiting for approval, given up or stuck) is stuck. The first time, its pipeline
+# runs again; stuck again on the same commit, it is handed to the gate as stalled: over to her (a bump is closed).
 name: sweep
 on:
   workflow_call:
@@ -29,8 +29,8 @@ jobs:
           for pr in $(gh pr list --state open --json number,isDraft --jq '.[] | select(.isDraft | not) | .number'); do
             head=$(gh pr view "$pr" --json headRefOid --jq .headRefOid)
             ours=$(gh api "repos/$GH_REPO/issues/$pr/comments" --paginate --jq '.[] | select(.user.login == "github-actions[bot]") | .body')
-            # in Slack already: the gate's comment carries the message's reference
-            grep -A1 '^<!-- pipeline:gate -->' <<<"$ours" | tail -1 | grep -q 'slack=[A-Z0-9]*:' && continue
+            # waiting for her already: the gate's comment carries the marker
+            awk '/^<!-- pipeline:gate -->/ {g = ""} {g = g $0 "\n"} END {printf "%s", g}' <<<"$ours" | grep -qx '<!-- pipeline:hers -->' && continue
             run=$(gh api "repos/$GH_REPO/actions/runs?head_sha=$head&event=pull_request&per_page=100" \
               --jq '[.workflow_runs[] | select(.path == ".github/workflows/pipeline.yml")] | max_by(.updated_at) // {}')
             last=$(jq -r '.updated_at // empty' <<<"$run"); [ -n "$last" ] || last=$(gh pr view "$pr" --json updatedAt --jq .updatedAt)

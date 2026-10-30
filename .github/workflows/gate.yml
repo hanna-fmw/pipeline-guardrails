@@ -8,9 +8,9 @@
 #   - CI files and paths listed in CODEOWNERS always count as high
 #   - a green PR merges itself when low-risk (docs/tests only, Claude agrees) or owner-approved, unless auto_merge is false
 #   - every red PR from this repo (Claude's, Dependabot's, hers) goes to Claude with the failure (output fix), at
-#     most 3 rounds; then a dependency bump is closed with a comment, and any other PR goes to Hanna in Slack
-#   - Slack (optional SLACK_BOT_TOKEN secret): a message in #pull-requests only while a PR needs Hanna (green and
-#     waiting for her merge or approval); deleted as soon as it doesn't, and when the PR is merged or closed.
+#     most 3 rounds; then a dependency bump is closed with a comment, and any other PR is over to Hanna
+#   - Slack (optional SLACK_BOT_TOKEN secret): every open PR has one message in #pull-requests, edited in place
+#     as its state changes (checks running, Claude fixing, ready, waiting, stuck...); deleted on merge or close.
 # On free private repos GitHub cannot lock the merge button: merge only when this check is green.
 name: gate
 on:
@@ -256,6 +256,7 @@ jobs:
               { echo "fix<<$eof"; cat "$RUNNER_TEMP/fix.md"; echo "$eof"; echo "branch=$branch"; } >> "$GITHUB_OUTPUT"
               gh pr comment "$PR" --body "<!-- pipeline:autofix $((rounds + 1)) -->"$'\n'"Claude is fixing this itself: round $((rounds + 1)) of 3." >/dev/null
               msg+=$'\n\n'"Claude is fixing this itself (round $((rounds + 1)) of 3)."
+              fixing=$((rounds + 1))
             fi
           fi
           # stalled and still blocked for any other reason (behind, a check that never finishes): stuck, so hers
@@ -263,23 +264,25 @@ jobs:
             stuck=true; msg+=$'\n\n'"Stuck: a run of the pipeline again did not move it. Over to you."
           fi
           echo "$msg" >> "$GITHUB_STEP_SUMMARY"
-          # Slack shows only what needs Hanna now (2026-10-28): a PR that is green and waits for her merge,
-          # or whose only missing piece is her approval (a slow check may still run). Failing, behind or
-          # threads open is the agent's job (the fix loop), never a post. A message that no longer applies,
-          # and every merged or closed PR, is deleted, not edited.
+          # Slack (Hanna, 2026-10-30): every open PR has one message, edited in place as its state changes, and it
+          # is the only notice about the PR anywhere; merged or closed, the message goes. "hers" marks the states
+          # that wait for her, which the daily sweep leaves alone.
           rest=$(printf '%s\n' "${blockers[@]}" | grep -cvE '^(Owner approval required|Checks still running)' || true)
-          if [ "${closed_bump:-}" = true ]; then
+          if [ "${closed_bump:-}" = true ] || [ "$state" = merged ]; then
             unslack
-          elif [ "${gave_up:-}" = true ]; then
-            [ -n "$sref" ] || slack "🔴 PR (Claude could not fix it):"
-          elif [ "${stuck:-}" = true ]; then
-            [ -n "$sref" ] || slack "🔴 PR (stuck):"
-          elif [ "$state" = ready ] || { [ "$state" = blocked ] && [ -z "$failed" ] && [ "${waiting_for_owner:-}" = true ] && [ "$rest" -eq 0 ]; }; then
-            [ -n "$sref" ] || slack "🟡 PR:"
-          else
-            unslack
+          elif [ "${gave_up:-}" = true ]; then hers=true; slack "🔴 Claude could not fix it, over to you:"
+          elif [ "${stuck:-}" = true ]; then hers=true; slack "🔴 Stuck (a retry did not help), over to you:"
+          elif [ "$state" = ready ]; then hers=true; slack "🟢 Ready for your merge:"
+          elif [ "$state" = blocked ] && [ -z "$failed" ] && [ "${waiting_for_owner:-}" = true ] && [ "$rest" -eq 0 ]; then
+            hers=true; slack "🟡 Waiting for your approval:"
+          elif [ -n "${fixing:-}" ]; then slack "🔧 Claude is fixing it (round $fixing of 3):"
+          elif [ "$pending" -gt 0 ]; then slack "⏳ Checks running:"
+          elif [ -n "${behind:-}" ]; then slack "🔄 Updating with main:"
+          else slack "🟠 Blocked ($(cut -c1-90 <<<"${blockers[0]}" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')):"
           fi
-          body="<!-- pipeline:gate -->"$'\n'"<!-- slack=${sref:-} -->"$'\n'"$msg"
+          body="<!-- pipeline:gate -->"$'\n'"<!-- slack=${sref:-} -->"$'\n'
+          [ -z "${hers:-}" ] || body+="<!-- pipeline:hers -->"$'\n'
+          body+="$msg"
           if [ -n "$id" ]; then gh api -X PATCH "repos/$GH_REPO/issues/comments/$id" -f body="$body" >/dev/null
           else gh pr comment "$PR" --body "$body"; fi
           [ -z "${closed_bump:-}" ] || gh pr close "$PR" --delete-branch >/dev/null
