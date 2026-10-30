@@ -86,13 +86,14 @@ jobs:
             gh pr edit "$PR" --remove-label owner-approved >/dev/null 2>&1 || true
           fi
 
-          pr=$(gh pr view "$PR" --json state,headRefOid,labels,mergeStateStatus,files,author,title,url,isCrossRepository,body,closingIssuesReferences)
+          pr=$(gh pr view "$PR" --json state,headRefOid,headRefName,labels,mergeStateStatus,files,author,title,url,isCrossRepository,body,closingIssuesReferences)
           old=$(gh api "repos/$GH_REPO/issues/$PR/comments" --paginate --jq '[.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- pipeline:gate -->")))] | last // {} | {id, body}')
           id=$(jq -r '.id // ""' <<<"$old")
           sref=$(jq -r '.body // ""' <<<"$old" | grep -o 'slack=[A-Z0-9]*:[0-9.]*' | head -1 | cut -d= -f2 || true)
           # This PR's one Slack message: edited if it exists, else posted and remembered in the gate comment
           slack() {
             local text ref
+            [[ "$(jq -r .headRefName <<<"$pr")" != ci/canary-* ]] || return 0 # the kit's canary run (sync.sh) never pings her
             text="$1${1:+ }<$(jq -r .url <<<"$pr")|${GH_REPO#*/} #$PR>: $(jq -r '.title | gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;")' <<<"$pr")"
             ref=$(slack-post "${sref:-${{ inputs.slack_channel }}}" "$text")
             [ -n "$sref" ] || sref=$ref
