@@ -52,6 +52,12 @@ jobs:
             fi
           done
 
+      - name: Python tests
+        run: |
+          if compgen -G "tests/test_*.py" >/dev/null; then
+            python3 -m unittest discover -s tests # the one Python test command; scripts/local-checks.sh reads this line
+          else echo "No tests/test_*.py, skipped."; fi
+
       - name: Workflow, shell and Python lint
         run: |
           if compgen -G ".github/workflows/*.y*ml" >/dev/null; then
