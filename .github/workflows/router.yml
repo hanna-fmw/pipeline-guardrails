@@ -65,6 +65,40 @@ jobs:
     with:
       pr: ${{ github.event.pull_request.number }}
       new_commits: ${{ github.event.action == 'synchronize' }}
+      autofix: true
+    secrets:
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      checks: read
+
+  autofix: # Claude's own PR is red: Claude gets the failure and fixes it (the gate counts the rounds, at most 3)
+    needs: gate
+    if: always() && needs.gate.outputs.fix != ''
+    concurrency:
+      group: autofix-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/claude-fix.yml@v1
+    with:
+      task: ${{ needs.gate.outputs.fix }}
+      branch: ${{ needs.gate.outputs.branch }}
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+
+  autofix-stalled: # a round that pushed nothing ends the loop: the gate hands the PR to Hanna
+    needs: autofix
+    if: always() && needs.autofix.result != 'skipped' && needs.autofix.outputs.pushed != 'true'
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/gate.yml@v1
+    with:
+      pr: ${{ github.event.pull_request.number }}
+      stalled: true
     secrets:
       SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
     permissions:

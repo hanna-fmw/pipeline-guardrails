@@ -1,9 +1,21 @@
 # "@claude <what to do>" in a PR comment: Claude makes the change and pushes it to the PR branch.
 # In an issue: Claude does the work on a new branch and opens a PR that closes the issue.
 # Its push comes from the Claude GitHub App, so the whole pipeline runs again on the new commit.
+# With task and branch (the router, after the gate found Claude's own PR red): Claude fixes that branch by itself.
 name: claude-fix
 on:
   workflow_call:
+    inputs:
+      task:
+        type: string
+        default: ""
+      branch:
+        type: string
+        default: ""
+    outputs:
+      pushed:
+        description: true when an automatic round pushed a new commit
+        value: ${{ jobs.claude.outputs.pushed }}
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN:
         required: true
@@ -17,6 +29,7 @@ permissions:
 jobs:
   admin:
     # Only repo admins may start this: the owner on a personal repo, an org admin on an org repo
+    if: inputs.task == '' # an automatic round comes from the gate, not a person
     runs-on: ubuntu-latest
     outputs:
       ok: ${{ steps.check.outputs.ok }}
@@ -26,20 +39,36 @@ jobs:
 
   claude:
     needs: admin
-    if: needs.admin.outputs.ok == 'true'
+    if: ${{ !cancelled() && (inputs.task != '' || needs.admin.outputs.ok == 'true') }}
     runs-on: ubuntu-latest
+    outputs:
+      pushed: ${{ steps.pushed.outputs.pushed }}
+    env:
+      BRANCH: ${{ inputs.branch }}
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ inputs.branch }} # empty: the event's own ref
           fetch-depth: 0 # full history, so Claude can merge main into the branch
+      - id: before
+        if: inputs.task != ''
+        run: echo "sha=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" >> "$GITHUB_OUTPUT"
       - uses: hanna-fmw/pipeline-guardrails/.github/actions/claude@v1 # the AI rules, written once
         timeout-minutes: 30 # runs take 1-8 min (2026-10-24); a stuck one stops and says so below
         with:
           token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: ${{ inputs.task }}
           deny: "Read(.git/**),Edit(.git/**),Write(.git/**),Edit(.github/**),Write(.github/**),Bash(git commit --no-verify:*),Bash(git * --output*),Bash(git * --ext-diff*),Bash(git * --no-index*),Bash(git -c *),Bash(git * -c *)"
-          instructions: "When you were called from an issue, finish by opening the pull request yourself with gh pr create: fill in .github/pull_request_template.md and put 'Closes #<issue number>' in the description. To bring a PR branch up to date: git fetch origin main, git merge origin/main, resolve the conflicts by editing the files, commit, push. You cannot run the tests here; the checks run on GitHub after your push, so read failing test output from the PR's Checks and fix the code."
+          instructions: "When you were called from an issue, finish by opening the pull request yourself with gh pr create: fill in .github/pull_request_template.md and put 'Closes #<issue number>' in the description. To bring a PR branch up to date: git fetch origin main, git merge origin/main, resolve the conflicts by editing the files, commit, push. You cannot run the tests here; the checks run on GitHub after your push, so fix the code from the failure output you were given."
           args: |
-            --allowedTools "Edit,Write,Read,Glob,Grep,Bash(git fetch origin main),Bash(git merge origin/main),Bash(git merge --no-edit origin/main),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*),Bash(gh pr create:*)"
+            --allowedTools "Edit,Write,Read,Glob,Grep,Bash(git fetch origin main),Bash(git merge origin/main),Bash(git merge --no-edit origin/main),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*),Bash(gh pr create:*)${{ inputs.branch && format(',Bash(git push origin HEAD:{0})', inputs.branch) || '' }}"
+      - id: pushed
+        if: always() && inputs.task != ''
+        env:
+          BEFORE: ${{ steps.before.outputs.sha }}
+        run: |
+          now=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
+          [ -n "$now" ] && [ "$now" != "$BEFORE" ] && echo "pushed=true" >> "$GITHUB_OUTPUT" || true
       - name: Say where it stopped
         if: failure()
         env:

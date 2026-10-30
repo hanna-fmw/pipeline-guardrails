@@ -38,12 +38,14 @@ jobs:
       - name: Install
         if: steps.pm.outputs.pm != 'none'
         run: |
+          exec > >(tee "$RUNNER_TEMP/checks.log") 2>&1 # this step's output, for the failure note below
           if [ "${{ steps.pm.outputs.pm }}" = pnpm ]; then pnpm install --frozen-lockfile
           else npm ci; fi
 
       - name: Lint, types, tests, build
         if: steps.pm.outputs.pm != 'none'
         run: |
+          exec > >(tee "$RUNNER_TEMP/checks.log") 2>&1 # this step's output, for the failure note below
           for s in lint typecheck test build; do # the one list of package scripts; scripts/local-checks.sh reads this line
             if jq -e --arg s "$s" '.scripts[$s]' package.json >/dev/null; then
               echo "::group::$s"; ${{ steps.pm.outputs.pm }} run "$s"; echo "::endgroup::"
@@ -54,12 +56,14 @@ jobs:
 
       - name: Python tests
         run: |
+          exec > >(tee "$RUNNER_TEMP/checks.log") 2>&1 # this step's output, for the failure note below
           if compgen -G "tests/test_*.py" >/dev/null; then
             python3 -m unittest discover -s tests # the one Python test command; scripts/local-checks.sh reads this line
           else echo "No tests/test_*.py, skipped."; fi
 
       - name: Workflow, shell and Python lint
         run: |
+          exec > >(tee "$RUNNER_TEMP/checks.log") 2>&1 # this step's output, for the failure note below
           if compgen -G ".github/workflows/*.y*ml" >/dev/null; then
             f=actionlint_1.7.12_linux_amd64.tar.gz
             curl -sSLo "$f" "https://github.com/rhysd/actionlint/releases/download/v1.7.12/$f"
@@ -76,6 +80,7 @@ jobs:
       - name: Vulnerable packages (high and critical, production only)
         if: steps.pm.outputs.pm != 'none'
         run: |
+          exec > >(tee "$RUNNER_TEMP/checks.log") 2>&1 # this step's output, for the failure note below
           if [ "${{ steps.pm.outputs.pm }}" = pnpm ]; then pnpm audit --prod --audit-level high
           else npm audit --omit=dev --audit-level=high; fi
 
@@ -85,8 +90,19 @@ jobs:
           GITLEAKS_VERSION: 8.30.1 # the one gitleaks pin: bump with the checksum below; ops reads this exact line shape
           BASE: ${{ github.event.pull_request.base.sha }}
         run: |
+          exec > >(tee "$RUNNER_TEMP/checks.log") 2>&1 # this step's output, for the failure note below
           f="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
           curl -sSLo "$f" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/$f"
           echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  $f" | sha256sum -c --quiet
           tar -xzf "$f" gitleaks
           ./gitleaks git --redact --no-banner --log-opts="${BASE}..HEAD" .
+
+      - name: Failure note
+        # The tail of the failing step's output as one annotation: the gate reads it (checks: read) and hands it to
+        # Claude when Claude's own PR fails, since Claude cannot run the checks itself.
+        if: failure()
+        run: |
+          [ -s "$RUNNER_TEMP/checks.log" ] || exit 0
+          msg=$(tail -n 80 "$RUNNER_TEMP/checks.log" | sed 's/\x1b\[[0-9;]*m//g' | tail -c 12000)
+          msg=${msg//'%'/'%25'}; msg=${msg//$'\r'/'%0D'}; msg=${msg//$'\n'/'%0A'}
+          echo "::error title=Checks failed::$msg"
