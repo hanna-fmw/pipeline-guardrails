@@ -1,6 +1,9 @@
 ## Summary
 <!-- 2-4 sentences anyone on the team can follow: what changes for users, and why. -->
 
+## Issue
+<!-- Closes #N for each issue this PR finishes (GitHub closes it at merge), or: No issue: <why> -->
+
 ## Details
 
 ## Testing

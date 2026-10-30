@@ -150,7 +150,7 @@ jobs:
 
   gate-command:
     if: >-
-      (github.event_name == 'pull_request' && (github.event.action == 'closed' || github.event.label.name == 'owner-approved'))
+      (github.event_name == 'pull_request' && (github.event.action == 'closed' || github.event.action == 'edited' || github.event.label.name == 'owner-approved'))
       || (github.event_name == 'issue_comment' && github.event.issue.pull_request
           && startsWith(github.event.comment.body, '/gate') && github.event.comment.author_association != 'NONE')
     uses: hanna-fmw/pipeline-guardrails/.github/workflows/gate.yml@v1
