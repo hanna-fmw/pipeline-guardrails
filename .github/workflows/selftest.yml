@@ -1,5 +1,5 @@
 # The kit tests itself: the checks workflow run on this repo, plus tests/run.sh.
-# Green on main: the release job tags it (next patch) and moves v1. scripts/release.sh is for minor/major bumps.
+# Green on main: the release job tags it (next patch); sync.sh moves v1 after the canary. Minor/major: scripts/release.sh.
 name: selftest
 on:
   push:
@@ -28,8 +28,8 @@ jobs:
       - run: bash tests/run.sh
 
   release:
-    # Every green main is released by itself (Hanna, 2026-10-28: no manual release step): the next patch
-    # version, and the major tag (v1) every repo pins moves to it. A minor or major bump: scripts/release.sh.
+    # Every green main is released by itself (Hanna, 2026-10-28: no manual release step) as the next patch
+    # version; v1, which every repo runs, moves to it after the canary passes (scripts/release.sh, sync.sh).
     needs: [checks, tests]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -45,14 +45,7 @@ jobs:
         with:
           fetch-depth: 0
       - run: |
-          git fetch -q --tags --force
-          last=$(git tag -l 'v*.*.*' --sort=-v:refname | head -1)
-          [ "$(git rev-list -n1 "$last")" != "$GITHUB_SHA" ] || { echo "$last is this commit already"; exit 0; }
-          IFS=. read -r M m p <<<"${last#v}"
-          v="v$M.$m.$((p + 1))"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$v" -m "$v" && git tag -fa "v$M" -m "v$M -> $v"
-          git push -q origin "$v" && git push -q -f origin "v$M"
-          gh release create "$v" --verify-tag --generate-notes --latest >/dev/null
-          echo "released $v; v$M points at it" | tee -a "$GITHUB_STEP_SUMMARY"
+          set -o pipefail
+          bash scripts/release.sh patch --ci | tee -a "$GITHUB_STEP_SUMMARY"

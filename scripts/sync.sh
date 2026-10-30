@@ -100,9 +100,55 @@ if [ "${1:-}" = --put ]; then
   exit $?
 fi
 
+owners=$(cd "$(paths get ops)" && python3 -m lib.config OWN_OWNERS) || { echo "FAILED: could not read OWN_OWNERS"; exit 1; }
+
+# The canary (layer review, layer 4): a new release runs first in the one repo with GitHub topic pipeline-canary,
+# as a PR whose pipeline file calls that exact version. v1, which every repo runs, moves to it only when that run
+# used the release's own commit throughout (GitHub's referenced_workflows) and its checks and both reviews passed;
+# the PR is then closed. A failed canary leaves v1 where it is, keeps the PR open and is reported.
+canary() {
+  local latest at c f stub br main head n run id ok gate
+  git fetch -q --force origin 'refs/tags/*:refs/tags/*' || { echo "FAILED: could not read the kit's tags"; return 1; }
+  latest=$(git tag -l 'v*.*.*' --sort=-v:refname | head -1); at=$(git rev-parse "$latest^{commit}")
+  [ "$at" != "$(git rev-parse 'v1^{commit}')" ] || return 0
+  [ "${1:-}" = --check ] && { echo "waiting: $latest for its canary run; repos still run the previous release"; return 0; }
+  for o in $owners; do c=$(gh search repos --owner "$o" --topic pipeline-canary --json fullName --jq '.[0].fullName // empty'); [ -n "$c" ] && break; done
+  [ -n "${c:-}" ] || { echo "FAILED: no repo has the topic pipeline-canary; v1 stays"; return 1; }
+  stub=$(mktemp); git show "$latest:templates/.github/workflows/pipeline.yml" | sed "s#router.yml@v1#router.yml@$latest#" > "$stub"
+  br="ci/canary-$latest" f=.github/workflows/pipeline.yml
+  main=$(gh api "repos/$c/git/ref/heads/main" --jq .object.sha) || { echo "FAILED: $c (no main)"; return 1; }
+  gh api -X DELETE "repos/$c/git/refs/heads/$br" >/dev/null 2>&1
+  gh api "repos/$c/git/refs" -f ref="refs/heads/$br" -f sha="$main" >/dev/null || { echo "FAILED: $c (branch)"; return 1; }
+  head=$(gh api -X PUT "repos/$c/contents/$f" -f message="ci: canary $latest" -f branch="$br" \
+    -f content="$(base64 < "$stub" | tr -d '\n')" -f sha="$(sha "$c" "$f" "$br")" --jq .commit.sha) || { echo "FAILED: $c (write)"; return 1; }
+  n=$(gh api "repos/$c/pulls" -f head="$br" -f base=main -f title="ci: kit canary $latest" \
+    -f body=$'Written by pipeline-guardrails scripts/sync.sh: this repo\'s pipeline on kit '"$latest"$' before every other repo. Closed by itself when it passes.\n\n## Issue\nNo issue: the kit\'s canary run.' --jq .number) \
+    || { echo "FAILED: $c (PR)"; return 1; }
+  for _ in $(seq 120); do # up to 40 minutes
+    run=$(gh api "repos/$c/actions/runs?head_sha=$head&event=pull_request" --jq '[.workflow_runs[] | select(.path == ".github/workflows/pipeline.yml")] | min_by(.created_at) // empty')
+    [ -n "$run" ] && [ "$(jq -r .status <<<"$run")" = completed ] && break; sleep 20
+  done
+  ok=false id=$(jq -r '.id // empty' <<<"${run:-}")
+  gate=$(gh api "repos/$c/issues/$n/comments" --jq '[.[] | select(.body | startswith("<!-- pipeline:gate -->"))] | last.body // ""' | grep '^- \[ \]')
+  # every kit file it ran came from the release's commit; checks and both reviews green; the gate's only blocker
+  # is the owner approval a workflow change always needs
+  if [ -n "$id" ] \
+     && jq -e --arg s "$at" '[.referenced_workflows[]? | select(.path | startswith("hanna-fmw/pipeline-guardrails/"))] | length > 0 and all(.sha == $s)' <<<"$run" >/dev/null \
+     && [ "$(gh api "repos/$c/actions/runs/$id/jobs" --jq '[.jobs[] | select(.name | test("checks / checks|review / claude|security / claude")) | .conclusion] | length == 3 and all(. == "success")')" = true ] \
+     && [ "$(wc -l <<<"$gate" | tr -d ' ')" = 1 ] && grep -q '^- \[ \] Owner approval required' <<<"$gate"; then ok=true; fi
+  if [ "$ok" = true ]; then
+    gh pr close "$n" -R "$c" --delete-branch >/dev/null
+    git tag -fa v1 -m "v1 -> $latest" "$at" && git push -q -f origin v1 || { echo "FAILED: could not move v1 to $latest"; return 1; }
+    echo "canary passed: v1 -> $latest ($c#$n)"
+  else
+    (cd "$(paths get ops)" && python3 -m lib.notify "Kit $latest failed its canary run in $c#$n, so no repo got it (v1 stays). https://github.com/$c/pull/$n")
+    echo "FAILED: canary $latest ($c#$n)"; return 1
+  fi
+}
+canary "${1:-}" || exit 1
+
 rel=$(mktemp -d); trap 'rm -rf "$rel"' EXIT
 released "$rel" || { echo "FAILED: could not read the released kit (v1)"; exit 1; }
-owners=$(cd "$(paths get ops)" && python3 -m lib.config OWN_OWNERS) || { echo "FAILED: could not read OWN_OWNERS"; exit 1; }
 for o in $owners; do
   if [ "$o" = hanna-fmw ]; then q="user/repos?affiliation=owner&per_page=100"; else q="orgs/$o/repos?per_page=100"; fi
   for r in $(gh api --paginate "$q" --jq '.[] | select(.archived | not) | .full_name'); do
