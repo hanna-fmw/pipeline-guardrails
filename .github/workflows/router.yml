@@ -1,6 +1,6 @@
 # The whole pipeline, routed by event: PR checks, both Claude reviews, the gate, and the commands
-# (@claude, /gate, /revert, ai:auto, owner-approved). Repo variable PIPELINE_MODE=light: checks only, no Claude
-# reviews, and the gate merges a green PR by itself. Every repo's .github/workflows/pipeline.yml only
+# (@claude, /gate, /revert, ai:auto, owner-approved), and the daily sweep for stuck PRs. Repo variable
+# PIPELINE_MODE=light: checks only, no Claude reviews, and the gate merges a green PR by itself. Every repo's .github/workflows/pipeline.yml only
 # calls this file, the same in every repo (templates/.github/workflows/pipeline.yml), so a change here
 # reaches every repo with the next release and no repo file ever changes.
 name: router
@@ -92,12 +92,38 @@ jobs:
       issues: write
       id-token: write
 
-  autofix-stalled: # a round that pushed nothing ends the loop: the gate hands the PR to Hanna
-    needs: autofix
-    if: always() && needs.autofix.result != 'skipped' && needs.autofix.outputs.pushed != 'true'
+  autofix-stalled: # a round that ran and pushed nothing ends the loop: the gate hands the PR to Hanna. A round
+    needs: autofix # that crashed is not the end: the daily sweep runs the pipeline again
+    if: always() && needs.autofix.result == 'success' && needs.autofix.outputs.pushed != 'true'
     uses: hanna-fmw/pipeline-guardrails/.github/workflows/gate.yml@v1
     with:
       pr: ${{ github.event.pull_request.number }}
+      stalled: true
+    secrets:
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      checks: read
+
+  sweep: # once a day: a stuck PR gets its pipeline run again, and stuck twice goes to Slack (sweep.yml)
+    if: github.event_name == 'schedule'
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/sweep.yml@v1
+    permissions:
+      actions: write
+      pull-requests: write
+      issues: write
+
+  sweep-stalled:
+    needs: sweep
+    if: always() && needs.sweep.outputs.stuck != '' && needs.sweep.outputs.stuck != '[]'
+    strategy:
+      matrix:
+        pr: ${{ fromJSON(needs.sweep.outputs.stuck) }}
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/gate.yml@v1
+    with:
+      pr: ${{ matrix.pr }}
       stalled: true
     secrets:
       SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
