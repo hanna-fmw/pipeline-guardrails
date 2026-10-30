@@ -23,7 +23,7 @@ jobs:
       contents: read
 
   review:
-    if: github.event_name == 'pull_request' && contains(fromJSON('["opened","synchronize","reopened","ready_for_review"]'), github.event.action) && vars.PIPELINE_MODE != 'light' # light mode: checks only
+    if: github.event_name == 'pull_request' && contains(fromJSON('["opened","synchronize","reopened","ready_for_review"]'), github.event.action) && vars.PIPELINE_MODE != 'light' && !(startsWith(github.head_ref, 'ci/pipeline-') && github.event.pull_request.user.login == 'hanna-fmw') # light mode: checks only; the kit's own rollout PRs (sync.sh) get no Claude review
     concurrency:
       group: review-${{ github.event.pull_request.number }}
       cancel-in-progress: true
@@ -40,7 +40,7 @@ jobs:
       id-token: write
 
   security:
-    if: github.event_name == 'pull_request' && contains(fromJSON('["opened","synchronize","reopened","ready_for_review"]'), github.event.action) && vars.PIPELINE_MODE != 'light' # light mode: checks only
+    if: github.event_name == 'pull_request' && contains(fromJSON('["opened","synchronize","reopened","ready_for_review"]'), github.event.action) && vars.PIPELINE_MODE != 'light' && !(startsWith(github.head_ref, 'ci/pipeline-') && github.event.pull_request.user.login == 'hanna-fmw') # light mode: checks only; the kit's own rollout PRs (sync.sh) get no Claude review
     concurrency:
       group: security-${{ github.event.pull_request.number }}
       cancel-in-progress: true
