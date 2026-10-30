@@ -6,8 +6,8 @@
 #     which is removed on every new push, so an approval covers one commit only
 #   - CI files and paths listed in CODEOWNERS always count as high
 #   - a green PR merges itself when low-risk (docs/tests only, Claude agrees) or owner-approved, unless auto_merge is false
-#   - Claude's own PR that fails its checks or review goes back to Claude with the failure (output fix), at most
-#     3 rounds; then it waits for Hanna
+#   - every red PR from this repo (Claude's, Dependabot's, hers) goes to Claude with the failure (output fix), at
+#     most 3 rounds; then a dependency bump is closed with a comment, and any other PR goes to Hanna in Slack
 #   - Slack (optional SLACK_BOT_TOKEN secret): a message in #pull-requests only while a PR needs Hanna (green and
 #     waiting for her merge or approval); deleted as soon as it doesn't, and when the PR is merged or closed.
 # On free private repos GitHub cannot lock the merge button: merge only when this check is green.
@@ -25,7 +25,7 @@ on:
         type: boolean
         default: true
       autofix:
-        description: May hand Claude's own red PR back to Claude (the router's PR-event gate only)
+        description: May hand a red PR to Claude (the router's PR-event gate only)
         type: boolean
         default: false
       stalled:
@@ -85,7 +85,7 @@ jobs:
             gh pr edit "$PR" --remove-label owner-approved >/dev/null 2>&1 || true
           fi
 
-          pr=$(gh pr view "$PR" --json state,headRefOid,labels,mergeStateStatus,files,author,title,url)
+          pr=$(gh pr view "$PR" --json state,headRefOid,labels,mergeStateStatus,files,author,title,url,isCrossRepository)
           old=$(gh api "repos/$GH_REPO/issues/$PR/comments" --paginate --jq '[.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- pipeline:gate -->")))] | last // {} | {id, body}')
           id=$(jq -r '.id // ""' <<<"$old")
           sref=$(jq -r '.body // ""' <<<"$old" | grep -o 'slack=[A-Z0-9]*:[0-9.]*' | head -1 | cut -d= -f2 || true)
@@ -210,17 +210,24 @@ jobs:
             state=blocked
             msg="**Merge gate: blocked** · risk $risk"$'\n\n'"$(printf -- '- [ ] %s\n' "${blockers[@]}")"
           fi
-          # Claude's own PR, red only on checks or review threads: Claude gets the failure and fixes it itself,
-          # at most 3 rounds over the PR's life (Hanna, 2026-10-29); then it is hers. Each round leaves a marker comment.
+          # A red PR (checks or review threads) from this repo: Claude gets the failure and fixes it, at most 3 rounds
+          # over the PR's life (Hanna, 2026-10-29/30: she should not have to act). Each round leaves a marker comment.
+          # Then: a dependency bump is closed with a comment (Dependabot proposes newer versions later); any other PR is hers.
           if { [ "${{ inputs.autofix }}" = true ] || [ "${{ inputs.stalled }}" = true ]; } \
-             && [ "$state" = blocked ] && [[ "$author" =~ ^(app/)?claude$ ]] && [ "$(jq -r .author.is_bot <<<"$pr")" = true ] && [ "$pending" -eq 0 ] && [ -z "${behind:-}" ] \
+             && [ "$state" = blocked ] && [ "$(jq -r .isCrossRepository <<<"$pr")" = false ] && [ "$pending" -eq 0 ] && [ -z "${behind:-}" ] \
              && { [ -n "$failed" ] || [ "$open" -gt 0 ]; }; then
             branch=$(gh pr view "$PR" --json headRefName --jq .headRefName)
             rounds=$(gh api "repos/$GH_REPO/issues/$PR/comments" --paginate \
               --jq '[.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- pipeline:autofix")))] | length' | jq -s add)
             if [ "${{ inputs.stalled }}" = true ] || [ "$rounds" -ge 3 ] || ! [[ "$branch" =~ ^[A-Za-z0-9._/-]+$ ]]; then
               gave_up=true
-              msg+=$'\n\n'"Claude could not fix this by itself ($rounds round(s)). Over to you: fix it, or comment \`@claude\` with what to do."
+              msg+=$'\n\n'"Claude could not fix this by itself ($rounds round(s))."
+              if [ "$author" = app/dependabot ]; then
+                closed_bump=true
+                msg+=" Closed: this dependency bump does not pass with the current code. Dependabot proposes newer versions on its next run."
+              else
+                msg+=" Over to you: fix it, or comment \`@claude\` with what to do."
+              fi
             else
               {
                 echo "Pull request #$PR (branch $branch) is red. Fix it on this branch. This is automatic fix round $((rounds + 1)) of 3."
@@ -246,7 +253,9 @@ jobs:
           # threads open is the agent's job (the fix loop), never a post. A message that no longer applies,
           # and every merged or closed PR, is deleted, not edited.
           rest=$(printf '%s\n' "${blockers[@]}" | grep -cvE '^(Owner approval required|Checks still running)' || true)
-          if [ "${gave_up:-}" = true ]; then
+          if [ "${closed_bump:-}" = true ]; then
+            unslack
+          elif [ "${gave_up:-}" = true ]; then
             [ -n "$sref" ] || slack "🔴 PR (Claude could not fix it):"
           elif [ "$state" = ready ] || { [ "$state" = blocked ] && [ -z "$failed" ] && [ "${waiting_for_owner:-}" = true ] && [ "$rest" -eq 0 ]; }; then
             [ -n "$sref" ] || slack "🟡 PR:"
@@ -256,6 +265,7 @@ jobs:
           body="<!-- pipeline:gate -->"$'\n'"<!-- slack=${sref:-} -->"$'\n'"$msg"
           if [ -n "$id" ]; then gh api -X PATCH "repos/$GH_REPO/issues/comments/$id" -f body="$body" >/dev/null
           else gh pr comment "$PR" --body "$body"; fi
+          [ -z "${closed_bump:-}" ] || gh pr close "$PR" --delete-branch >/dev/null
           echo "ok=$([ ${#blockers[@]} -eq 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
       - name: Verdict # its own step, so a red verdict still hands its outputs (the fix task) to the router

@@ -1,7 +1,7 @@
 # "@claude <what to do>" in a PR comment: Claude makes the change and pushes it to the PR branch.
 # In an issue: Claude does the work on a new branch and opens a PR that closes the issue.
 # Its push comes from the Claude GitHub App, so the whole pipeline runs again on the new commit.
-# With task and branch (the router, after the gate found Claude's own PR red): Claude fixes that branch by itself.
+# With task and branch (the router, after the gate found a PR red): Claude fixes that branch by itself.
 name: claude-fix
 on:
   workflow_call:
@@ -50,6 +50,7 @@ jobs:
         with:
           ref: ${{ inputs.branch }} # empty: the event's own ref
           fetch-depth: 0 # full history, so Claude can merge main into the branch
+          persist-credentials: false # else this token, not the Claude app's, pushes, and GitHub holds the new run for approval
       - id: before
         if: inputs.task != ''
         run: echo "sha=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" >> "$GITHUB_OUTPUT"

@@ -99,7 +99,7 @@ jobs:
 
       - name: Failure note
         # The tail of the failing step's output as one annotation: the gate reads it (checks: read) and hands it to
-        # Claude when Claude's own PR fails, since Claude cannot run the checks itself.
+        # Claude when a PR fails, since Claude cannot run the checks itself.
         if: failure()
         run: |
           [ -s "$RUNNER_TEMP/checks.log" ] || exit 0

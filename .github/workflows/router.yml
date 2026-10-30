@@ -74,7 +74,7 @@ jobs:
       issues: write
       checks: read
 
-  autofix: # Claude's own PR is red: Claude gets the failure and fixes it (the gate counts the rounds, at most 3)
+  autofix: # a PR from this repo is red: Claude gets the failure and fixes it (the gate counts the rounds, at most 3)
     needs: gate
     if: always() && needs.gate.outputs.fix != ''
     concurrency:
