@@ -59,7 +59,7 @@ jobs:
         with:
           token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: ${{ inputs.task }}
-          allowed_bots: ${{ inputs.task && 'claude' || '' }} # a fix round follows the Claude bot's own push
+          allowed_bots: ${{ inputs.task && 'claude,dependabot' || '' }} # a fix round follows the Claude bot's or Dependabot's push
           deny: "Read(.git/**),Edit(.git/**),Write(.git/**),Edit(.github/**),Write(.github/**),Bash(git commit --no-verify:*),Bash(git * --output*),Bash(git * --ext-diff*),Bash(git * --no-index*),Bash(git -c *),Bash(git * -c *)"
           instructions: "When you were called from an issue, finish by opening the pull request yourself with gh pr create: fill in .github/pull_request_template.md and put 'Closes #<issue number>' in the description. To bring a PR branch up to date: git fetch origin main, git merge origin/main, resolve the conflicts by editing the files, commit, push. You cannot run the tests here; the checks run on GitHub after your push, so fix the code from the failure output you were given."
           args: |
