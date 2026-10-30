@@ -1,0 +1,50 @@
+# Once a day, no PR stays stuck (Hanna, 2026-10-30): an open PR that nothing has run on for 6 hours and that is not
+# in Slack (green and waiting for her, or given up) is stuck. The first time, its pipeline runs again; stuck again
+# on the same commit, it is handed to the gate as stalled, which puts it in Slack (a dependency bump is closed).
+name: sweep
+on:
+  workflow_call:
+    outputs:
+      stuck:
+        description: JSON list of PR numbers already retried and still stuck; the router runs the stalled gate on each
+        value: ${{ jobs.sweep.outputs.stuck }}
+
+permissions:
+  actions: write # run a stuck PR's pipeline again
+  pull-requests: write
+  issues: write
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    outputs:
+      stuck: ${{ steps.find.outputs.stuck }}
+    steps:
+      - id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          now=$(date +%s); stuck=()
+          for pr in $(gh pr list --state open --json number,isDraft --jq '.[] | select(.isDraft | not) | .number'); do
+            head=$(gh pr view "$pr" --json headRefOid --jq .headRefOid)
+            ours=$(gh api "repos/$GH_REPO/issues/$pr/comments" --paginate --jq '.[] | select(.user.login == "github-actions[bot]") | .body')
+            # in Slack already: the gate's comment carries the message's reference
+            grep -A1 '^<!-- pipeline:gate -->' <<<"$ours" | tail -1 | grep -q 'slack=[A-Z0-9]*:' && continue
+            run=$(gh api "repos/$GH_REPO/actions/runs?head_sha=$head&event=pull_request&per_page=100" \
+              --jq '[.workflow_runs[] | select(.path == ".github/workflows/pipeline.yml")] | max_by(.updated_at) // {}')
+            last=$(jq -r '.updated_at // empty' <<<"$run"); [ -n "$last" ] || last=$(gh pr view "$pr" --json updatedAt --jq .updatedAt)
+            [ $((now - $(date -d "$last" +%s))) -ge 21600 ] || continue # something ran in the last 6 hours
+            id=$(jq -r '.id // empty' <<<"$run")
+            if grep -qx "<!-- pipeline:retry $head -->" <<<"$ours"; then
+              stuck+=("$pr") # retried once on this commit already
+            elif [ -n "$id" ] && [ "$(jq -r .status <<<"$run")" = completed ] \
+                 && { gh run rerun "$id" --failed 2>/dev/null || gh run rerun "$id"; }; then
+              gh pr comment "$pr" --body "<!-- pipeline:retry $head -->"$'\n'"Nothing has moved here for 6 hours: the pipeline runs again." >/dev/null
+              echo "retried #$pr (run $id)"
+            else
+              stuck+=("$pr") # no run, a run hung for 6 hours, or one GitHub will not run again
+            fi
+          done
+          echo "stuck=$(printf '%s\n' "${stuck[@]}" | jq -Rsc 'split("\n") | map(select(. != "") | tonumber)')" >> "$GITHUB_OUTPUT"
+          echo "stuck: ${stuck[*]:-none}"

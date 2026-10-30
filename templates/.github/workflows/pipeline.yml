@@ -12,6 +12,8 @@ on:
     types: [created]
   issues:
     types: [opened, labeled, edited, closed]
+  schedule:
+    - cron: "17 5 * * *" # the daily sweep for stuck PRs
 
 jobs:
   run:
@@ -25,3 +27,4 @@ jobs:
       issues: write
       id-token: write
       checks: read
+      actions: write

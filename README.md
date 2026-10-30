@@ -18,7 +18,7 @@ A pull-request pipeline for small teams that let AI agents write code, modelled 
 
 Mode per repo: the repo variable `PIPELINE_MODE=light` runs the checks only (no Claude review or security review), and the gate merges a green PR by itself, except CI files and CODEOWNERS paths, which still need the owner. Unset means the full pipeline. Depth per repo: `quick`, `standard` (2 hunters, 1 verifier each) or `deep` (4 hunters, 3 voting verifiers), set by the repo variable `PIPELINE_DEPTH` (default `standard`).
 
-Red PRs fix themselves: when a PR from the repo fails its checks or the Claude review, the gate hands Claude the failure and Claude pushes a fix, at most 3 rounds per PR. After that a Dependabot bump is closed with a comment, and any other PR goes to Slack as one line.
+Red PRs fix themselves: when a PR from the repo fails its checks or the Claude review, the gate hands Claude the failure and Claude pushes a fix, at most 3 rounds per PR. After that a Dependabot bump is closed with a comment, and any other PR goes to Slack as one line. No PR stays stuck: once a day, a PR that nothing has run on for 6 hours and that is not in Slack gets its pipeline run again, and if it is still stuck the next day it goes the same way (closed bump, or Slack).
 
 ## Approving a PR
 
