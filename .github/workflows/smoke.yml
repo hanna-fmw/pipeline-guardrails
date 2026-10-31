@@ -1,0 +1,68 @@
+# After each production deploy: is the new version really live and answering? Alert only, it never rolls back.
+# Slack holds one message per app, deleted once a later deploy is fine. Only the newest deploy is judged.
+# A repo calls this on deployment_status, with its health page, whose JSON has build = the deployed commit.
+name: smoke
+on:
+  workflow_call:
+    inputs:
+      health_url:
+        type: string
+        required: true
+      page_url:
+        description: A public page that must answer 200, such as the login page
+        type: string
+        required: true
+    secrets:
+      SLACK_BOT_TOKEN:
+        required: true
+
+permissions: {}
+
+jobs:
+  smoke:
+    if: endsWith(github.event.deployment.environment, 'production') && contains(fromJSON('["success","failure","error"]'), github.event.deployment_status.state)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      deployments: read
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          STATE: ${{ github.event.deployment_status.state }}
+          DEPLOYMENT: ${{ github.event.deployment.id }}
+          SHA: ${{ github.event.deployment.sha }}
+          ENV: ${{ github.event.deployment.environment }}
+          HEALTH: ${{ inputs.health_url }}
+          PAGE: ${{ inputs.page_url }}
+        run: |
+          newest=$(gh api -X GET "repos/$GH_REPO/deployments" -f environment="$ENV" -F per_page=1 --jq '.[0].id')
+          if [ "$newest" != "$DEPLOYMENT" ]; then echo "A newer deploy exists; it gets its own run."; exit 0; fi
+          problem=
+          if [ "$STATE" != success ]; then
+            problem="the deploy failed, so the site still runs the previous version"
+          else
+            build=
+            for _ in $(seq 12); do
+              build=$(curl -fsS --max-time 20 "$HEALTH" | jq -r '.build // ""') || build=
+              [ "$build" = "$SHA" ] && break
+              sleep 15
+            done
+            page=$(curl -s -o /dev/null --max-time 20 -w '%{http_code}' "$PAGE") || page=none
+            if [ "$build" != "$SHA" ]; then problem="the health page reports ${build:-no answer}, not the new version"
+            elif [ "$page" != 200 ]; then problem="$PAGE answered $page"; fi
+          fi
+          echo "problem=$problem" >> "$GITHUB_OUTPUT"
+          echo "checked=true" >> "$GITHUB_OUTPUT"
+          echo "${problem:-Live on $SHA and answering.}"
+      - if: steps.check.outputs.checked == 'true'
+        uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@v1
+        with:
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          clear: "${{ github.event.repository.name }} deploy:"
+      - if: steps.check.outputs.problem != ''
+        uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@v1
+        with:
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          text: "🔴 ${{ github.event.repository.name }} deploy: ${{ steps.check.outputs.problem }} (commit ${{ github.event.deployment.sha }})"
