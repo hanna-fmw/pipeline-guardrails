@@ -153,11 +153,12 @@ canary() {
   done
   ok=false id=$(jq -r '.id // empty' <<<"${run:-}")
   gate=$(gh api "repos/$c/issues/$n/comments" --jq '[.[] | select(.body | startswith("<!-- pipeline:gate -->"))] | last.body // ""' | grep '^- \[ \]')
-  # every kit file it ran came from the release's commit; checks and both reviews green; the gate's only blocker
+  # every kit file it ran came from the release's commit; checks green (no Claude review here: its action refuses a
+  # PR that changes its workflow file, so the reviews are not tried by this run); the gate's only blocker
   # is the owner approval a workflow change always needs
   if [ -n "$id" ] \
      && jq -e --arg s "$at" '[.referenced_workflows[]? | select(.path | startswith("hanna-fmw/pipeline-guardrails/"))] | length > 0 and all(.sha == $s)' <<<"$run" >/dev/null \
-     && [ "$(gh api "repos/$c/actions/runs/$id/jobs" --jq '[.jobs[] | select(.name | test("checks / checks|review / claude|security / claude")) | .conclusion] | length == 3 and all(. == "success")')" = true ] \
+     && [ "$(gh api "repos/$c/actions/runs/$id/jobs" --jq '[.jobs[] | select(.name | test("checks / checks")) | .conclusion] | length == 1 and all(. == "success")')" = true ] \
      && [ "$(wc -l <<<"$gate" | tr -d ' ')" = 1 ] && grep -q '^- \[ \] Owner approval required' <<<"$gate"; then ok=true; fi
   if [ "$ok" = true ]; then
     gh pr close "$n" -R "$c" --delete-branch >/dev/null
