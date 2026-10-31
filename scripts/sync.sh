@@ -23,6 +23,19 @@ case "${1:-}" in
   *) echo "FAILED: unknown option ${1} (--help lists them); nothing done"; exit 64 ;; # never a repair on a typo
 esac
 cd "$(dirname "$0")/.." || exit 1
+# Main's newest commit, only when its self-test passed: nothing from main runs here before that
+green_main() {
+  local sha
+  git fetch -q origin main || return 1
+  sha=$(git rev-parse origin/main) || return 1
+  gh api "repos/hanna-fmw/pipeline-guardrails/actions/workflows/selftest.yml/runs?head_sha=$sha&event=push" --jq '[.workflow_runs[] | .conclusion]' | jq -e 'index("success") != null' >/dev/null || return 1
+  echo "$sha"
+}
+# The daily repair runs this from her main checkout, which nothing else updates: move it to main's latest green commit
+if [ -z "${1:-}" ] && [ "$(git branch --show-current)" = main ] && green=$(green_main) && [ "$(git rev-parse HEAD)" != "$green" ]; then
+  if git merge -q --ff-only "$green"; then exec bash scripts/sync.sh "$@"; fi
+  echo "FAILED: could not update the kit's main checkout; running it as it is" >&2
+fi
 MANAGED=".github/workflows/pipeline.yml .github/pull_request_template.md .claude/settings.json"
 RETIRED=".github/workflows/commands.yml"
 [ "${1:-}" = --list ] && { tr ' ' '\n' <<<"$MANAGED"; exit 0; }
@@ -107,7 +120,17 @@ owners=$(cd "$(paths get ops)" && python3 -m lib.config OWN_OWNERS) || { echo "F
 # used the release's own commit throughout (GitHub's referenced_workflows) and its checks and both reviews passed;
 # the PR is then closed. A failed canary leaves v1 where it is, keeps the PR open and is reported.
 canary() {
-  local latest at c f stub br main head n run id ok gate
+  local latest at c f stub br main head n run id ok gate d green
+  # A green main not yet released gets its tag here, in a throwaway checkout: this one may be anyone's working copy.
+  # Main not green yet is no failure: the release waits and the repos are still repaired.
+  if [ "${1:-}" != --check ]; then
+    if green=$(green_main); then
+      d=$(mktemp -d)
+      git worktree add -q --detach "$d" "$green" || { echo "FAILED: could not check out main to release it"; return 1; }
+      bash "$d/scripts/release.sh" patch || { git worktree remove --force "$d"; return 1; }
+      git worktree remove --force "$d"
+    else echo "waiting: main has no passing self-test yet, so no new release"; fi
+  fi
   git fetch -q --force origin 'refs/tags/*:refs/tags/*' || { echo "FAILED: could not read the kit's tags"; return 1; }
   latest=$(git tag -l 'v*.*.*' --sort=-v:refname | head -1); at=$(git rev-parse "$latest^{commit}")
   [ "$at" != "$(git rev-parse 'v1^{commit}')" ] || return 0
