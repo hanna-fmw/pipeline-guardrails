@@ -64,6 +64,10 @@ Opt-in, per repo: copy `templates/.github/workflows/backup.yml` and `templates/R
 
 Private repos on the free plan cannot lock the merge button (rulesets need GitHub Pro or a public repo). Everything above still runs; the gate is a red or green check, and you merge only on green. A PR runs the workflow files on its own branch, so a PR that edits `.github/` could fake a green gate; that is why those paths are always high risk and need your own review. With Pro, make `gate` a required status check, require conversation resolution, and block direct pushes to `main`.
 
+## After a deploy
+
+`smoke.yml`: a repo with a live app calls it on `deployment_status`. It alerts in Slack when a production deploy fails, or when the health page or a public page shows the new version is not really live. Alert only, no rollback.
+
 ## Reference modules
 
 | # | Module | Covers |
