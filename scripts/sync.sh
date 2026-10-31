@@ -116,7 +116,8 @@ canary() {
   local latest at c f stub br main head n run id ok gate d
   # A green main not yet released gets its tag here, in a throwaway checkout: this one may be anyone's working copy
   if [ "${1:-}" != --check ]; then
-    d=$(mktemp -d); git fetch -q origin main && git worktree add -q --detach "$d" origin/main || { echo "FAILED: could not check out main to release it"; return 1; }
+    d=$(mktemp -d)
+    if ! { git fetch -q origin main && git worktree add -q --detach "$d" origin/main; }; then echo "FAILED: could not check out main to release it"; return 1; fi
     bash "$d/scripts/release.sh" patch || { git worktree remove --force "$d"; return 1; }
     git worktree remove --force "$d"
   fi
