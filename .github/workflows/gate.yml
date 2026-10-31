@@ -195,16 +195,27 @@ jobs:
           fi
 
           # One sticky comment with the verdict
+          # Main moving at that moment: the checks never saw the combined code, so update the branch as in 3., never merge blind
+          merge_pr() {
+            local out
+            out=$(gh pr merge "$PR" --squash --match-head-commit "$head" --subject "$(jq -r .title <<<"$pr") (#$PR)" \
+                  --body "$(gh pr view "$PR" --json body --jq .body | grep -viE '^(co-authored-by|signed-off-by):' || true)" 2>&1) && return 0
+            echo "$out" >&2
+            grep -q 'Base branch was modified' <<<"$out" || return 1
+            behind=true
+            if gh pr update-branch "$PR" >/dev/null 2>&1; then blockers+=("\`main\` moved during the merge: updated the branch; the checks run again on the combined code.")
+            else blockers+=("\`main\` moved during the merge and the branch conflicts with it. Comment \`@claude bring this PR up to date with main\`."); fi
+            return 1
+          }
           # Green and (low risk, or owner approved): merge. GitHub refuses this token on PRs that change workflow files.
           can_merge=$( { [ "$risk" = low ] && [ "$author" != "app/dependabot" ]; } || [ "$approved" = true ] && echo true || echo false)
           if [ ${#blockers[@]} -eq 0 ] && [ "$can_merge" = true ] && [ "${{ inputs.auto_merge }}" = true ] \
-             && gh pr merge "$PR" --squash --match-head-commit "$head" --subject "$(jq -r .title <<<"$pr") (#$PR)" \
-                  --body "$(gh pr view "$PR" --json body --jq .body | grep -viE '^(co-authored-by|signed-off-by):' || true)"; then
+             && merge_pr; then
             # the squash message is set here: GitHub's default copies every branch commit's Co-authored-by into main
             state=merged
             close_linked
             msg="**Merge gate: merged** · risk $risk"$'\n\n'"All checks passed and all threads are resolved$([ "$approved" != true ] || echo "; owner approved"). Merged automatically. Comment \`/revert\` to undo."
-          elif [ ${#blockers[@]} -eq 0 ]; then
+          elif [ ${#blockers[@]} -eq 0 ]; then # merge_pr may have added one
             state=ready
             msg="**Merge gate: ready** · risk $risk"$'\n\n'"All checks passed and all threads are resolved$([ "$approved" != true ] || echo "; owner approved"). Ready to squash and merge$([ "$can_merge" != true ] || echo " (it could not merge itself, likely a workflow file: press **Squash and merge**)")."
           else
