@@ -50,8 +50,8 @@ jobs:
               sleep 15
             done
             page=$(curl -s -o /dev/null --max-time 20 -w '%{http_code}' "$PAGE") || page=none
-            if [ "$build" != "$SHA" ]; then problem="the health page reports ${build:-no answer}, not the new version"
-            elif [ "$page" != 200 ]; then problem="$PAGE answered $page"; fi
+            if [ "$build" != "$SHA" ]; then problem="the health page does not report the new version"
+            elif [ "$page" != 200 ]; then problem="the public page did not answer 200"; fi
           fi
           echo "problem=$problem" >> "$GITHUB_OUTPUT"
           echo "checked=true" >> "$GITHUB_OUTPUT"
@@ -60,9 +60,9 @@ jobs:
         uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@v1
         with:
           token: ${{ secrets.SLACK_BOT_TOKEN }}
-          clear: "${{ github.event.repository.name }} deploy:"
+          clear: "${{ github.repository }} deploy:"
       - if: steps.check.outputs.problem != ''
         uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@v1
         with:
           token: ${{ secrets.SLACK_BOT_TOKEN }}
-          text: "🔴 ${{ github.event.repository.name }} deploy: ${{ steps.check.outputs.problem }} (commit ${{ github.event.deployment.sha }})"
+          text: "🔴 ${{ github.repository }} deploy: ${{ steps.check.outputs.problem }} (commit ${{ github.event.deployment.sha }})"
