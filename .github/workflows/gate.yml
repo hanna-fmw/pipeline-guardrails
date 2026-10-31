@@ -203,10 +203,10 @@ jobs:
             # the squash message is set here: GitHub's default copies every branch commit's Co-authored-by into main
             state=merged
             close_linked
-            msg="**Merge gate: merged** · risk $risk"$'\n\n'"All checks passed and all threads are resolved$([ "$approved" = true ] && echo "; owner approved"). Merged automatically. Comment \`/revert\` to undo."
+            msg="**Merge gate: merged** · risk $risk"$'\n\n'"All checks passed and all threads are resolved$([ "$approved" != true ] || echo "; owner approved"). Merged automatically. Comment \`/revert\` to undo."
           elif [ ${#blockers[@]} -eq 0 ]; then
             state=ready
-            msg="**Merge gate: ready** · risk $risk"$'\n\n'"All checks passed and all threads are resolved$([ "$approved" = true ] && echo "; owner approved"). Ready to squash and merge$([ "$can_merge" = true ] && echo " (it could not merge itself, likely a workflow file: press **Squash and merge**)")."
+            msg="**Merge gate: ready** · risk $risk"$'\n\n'"All checks passed and all threads are resolved$([ "$approved" != true ] || echo "; owner approved"). Ready to squash and merge$([ "$can_merge" != true ] || echo " (it could not merge itself, likely a workflow file: press **Squash and merge**)")."
           else
             state=blocked
             msg="**Merge gate: blocked** · risk $risk"$'\n\n'"$(printf -- '- [ ] %s\n' "${blockers[@]}")"
