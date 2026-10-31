@@ -172,7 +172,7 @@ jobs:
 
       - name: A good run takes back the last failure's Slack line
         if: success()
-        uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@v1
+        uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@v1.3.36
         with:
           token: ${{ secrets.SLACK_BOT_TOKEN }}
           channel: ${{ inputs.slack_channel }}
@@ -180,7 +180,7 @@ jobs:
 
       - name: Say it failed
         if: failure()
-        uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@v1
+        uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@v1.3.36
         with:
           token: ${{ secrets.SLACK_BOT_TOKEN }}
           channel: ${{ inputs.slack_channel }}

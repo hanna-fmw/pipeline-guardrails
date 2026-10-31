@@ -35,7 +35,7 @@ jobs:
       ok: ${{ steps.check.outputs.ok }}
     steps:
       - id: check
-        uses: hanna-fmw/pipeline-guardrails/.github/actions/admin@v1
+        uses: hanna-fmw/pipeline-guardrails/.github/actions/admin@v1.3.36
 
   claude:
     needs: admin
@@ -54,7 +54,7 @@ jobs:
       - id: before
         if: inputs.task != ''
         run: echo "sha=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)" >> "$GITHUB_OUTPUT"
-      - uses: hanna-fmw/pipeline-guardrails/.github/actions/claude@v1 # the AI rules, written once
+      - uses: hanna-fmw/pipeline-guardrails/.github/actions/claude@v1.3.36 # the AI rules, written once
         timeout-minutes: 30 # runs take 1-8 min (2026-10-24); a stuck one stops and says so below
         with:
           token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

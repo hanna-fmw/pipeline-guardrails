@@ -70,8 +70,8 @@ jobs:
       MODE: ${{ vars.PIPELINE_MODE }} # light: checks only, a green PR merges by itself
     steps:
       - uses: actions/checkout@v7
-      - uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@v1 # puts slack-post on PATH
-      - uses: hanna-fmw/pipeline-guardrails/.github/actions/admin@v1 # puts is-admin on PATH
+      - uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@v1.3.36 # puts slack-post on PATH
+      - uses: hanna-fmw/pipeline-guardrails/.github/actions/admin@v1.3.36 # puts is-admin on PATH
 
       - name: Decide
         id: decide
