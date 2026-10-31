@@ -18,7 +18,7 @@ jobs:
     concurrency:
       group: checks-${{ github.event.pull_request.number }}
       cancel-in-progress: true
-    uses: hanna-fmw/pipeline-guardrails/.github/workflows/checks.yml@v1
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/checks.yml@v1.3.35
     permissions:
       contents: read
 
@@ -27,7 +27,7 @@ jobs:
     concurrency:
       group: review-${{ github.event.pull_request.number }}
       cancel-in-progress: true
-    uses: hanna-fmw/pipeline-guardrails/.github/workflows/claude-review.yml@v1
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/claude-review.yml@v1.3.35
     with:
       kind: review
       depth: ${{ vars.PIPELINE_DEPTH || 'standard' }} # repo variable PIPELINE_DEPTH: quick | standard | deep
@@ -44,7 +44,7 @@ jobs:
     concurrency:
       group: security-${{ github.event.pull_request.number }}
       cancel-in-progress: true
-    uses: hanna-fmw/pipeline-guardrails/.github/workflows/claude-review.yml@v1
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/claude-review.yml@v1.3.35
     with:
       kind: security
     secrets:
@@ -61,7 +61,7 @@ jobs:
       group: gate-${{ github.event.pull_request.number }}
       cancel-in-progress: true
     needs: [checks, review, security]
-    uses: hanna-fmw/pipeline-guardrails/.github/workflows/gate.yml@v1
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/gate.yml@v1.3.35
     with:
       pr: ${{ github.event.pull_request.number }}
       new_commits: ${{ github.event.action == 'synchronize' }}
@@ -80,7 +80,7 @@ jobs:
     concurrency:
       group: autofix-${{ github.event.pull_request.number }}
       cancel-in-progress: false
-    uses: hanna-fmw/pipeline-guardrails/.github/workflows/claude-fix.yml@v1
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/claude-fix.yml@v1.3.35
     with:
       task: ${{ needs.gate.outputs.fix }}
       branch: ${{ needs.gate.outputs.branch }}
@@ -95,7 +95,7 @@ jobs:
   autofix-stalled: # a round that ran and pushed nothing ends the loop: the gate hands the PR to Hanna. A round
     needs: autofix # that crashed is not the end: the daily sweep runs the pipeline again
     if: always() && needs.autofix.result == 'success' && needs.autofix.outputs.pushed != 'true'
-    uses: hanna-fmw/pipeline-guardrails/.github/workflows/gate.yml@v1
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/gate.yml@v1.3.35
     with:
       pr: ${{ github.event.pull_request.number }}
       stalled: true
@@ -109,7 +109,7 @@ jobs:
 
   sweep: # once a day: a stuck PR gets its pipeline run again, and stuck twice goes to Slack (sweep.yml)
     if: github.event_name == 'schedule'
-    uses: hanna-fmw/pipeline-guardrails/.github/workflows/sweep.yml@v1
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/sweep.yml@v1.3.35
     permissions:
       actions: write
       pull-requests: write
@@ -121,7 +121,7 @@ jobs:
     strategy:
       matrix:
         pr: ${{ fromJSON(needs.sweep.outputs.stuck) }}
-    uses: hanna-fmw/pipeline-guardrails/.github/workflows/gate.yml@v1
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/gate.yml@v1.3.35
     with:
       pr: ${{ matrix.pr }}
       stalled: true
@@ -139,7 +139,7 @@ jobs:
         && contains(github.event.comment.body, '@claude') && github.event.comment.author_association != 'NONE')
       || (github.event_name == 'issues' && github.event.action == 'opened'
         && contains(github.event.issue.body, '@claude') && github.event.issue.author_association != 'NONE')
-    uses: hanna-fmw/pipeline-guardrails/.github/workflows/claude-fix.yml@v1
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/claude-fix.yml@v1.3.35
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
     permissions:
@@ -153,7 +153,7 @@ jobs:
       (github.event_name == 'pull_request' && (github.event.action == 'closed' || github.event.action == 'edited' || github.event.label.name == 'owner-approved'))
       || (github.event_name == 'issue_comment' && github.event.issue.pull_request
           && startsWith(github.event.comment.body, '/gate') && github.event.comment.author_association != 'NONE')
-    uses: hanna-fmw/pipeline-guardrails/.github/workflows/gate.yml@v1
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/gate.yml@v1.3.35
     with:
       pr: ${{ github.event.pull_request.number || github.event.issue.number }}
     secrets:
@@ -166,7 +166,7 @@ jobs:
 
   auto-pin:
     if: github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'ai:auto'
-    uses: hanna-fmw/pipeline-guardrails/.github/workflows/issue-auto.yml@v1
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/issue-auto.yml@v1.3.35
     with:
       mode: pin
     permissions:
@@ -179,7 +179,7 @@ jobs:
     if: >-
       github.event_name == 'issues'
       && (github.event.action == 'edited' || github.event.action == 'closed' || github.event.label.name == 'ai:auto')
-    uses: hanna-fmw/pipeline-guardrails/.github/workflows/issue-auto.yml@v1
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/issue-auto.yml@v1.3.35
     with:
       mode: clear
     secrets:
@@ -195,7 +195,7 @@ jobs:
     concurrency: # one run per issue; each label starts only its own issue
       group: ai-auto-${{ github.event.issue.number }}
       cancel-in-progress: false
-    uses: hanna-fmw/pipeline-guardrails/.github/workflows/issue-auto.yml@v1
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/issue-auto.yml@v1.3.35
     with:
       mode: run
     secrets:
@@ -211,7 +211,7 @@ jobs:
     if: >-
       github.event_name == 'issue_comment' && github.event.issue.pull_request
       && startsWith(github.event.comment.body, '/revert') && github.event.comment.author_association != 'NONE'
-    uses: hanna-fmw/pipeline-guardrails/.github/workflows/revert.yml@v1
+    uses: hanna-fmw/pipeline-guardrails/.github/workflows/revert.yml@v1.3.35
     with:
       pr: ${{ github.event.issue.number }}
     permissions:

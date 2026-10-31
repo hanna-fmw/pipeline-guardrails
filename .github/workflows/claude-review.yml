@@ -124,7 +124,7 @@ jobs:
         id: claude
         if: steps.prep.outputs.skip != 'true'
         timeout-minutes: 30 # runs take 1-2 min (2026-10-24); a stuck one fails the check, so the gate posts red in Slack
-        uses: hanna-fmw/pipeline-guardrails/.github/actions/claude@v1 # the AI rules, written once
+        uses: hanna-fmw/pipeline-guardrails/.github/actions/claude@v1.3.35 # the AI rules, written once
         with:
           token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           allowed_bots: claude # PRs Claude opens from ai:auto issues or @claude get reviewed too
