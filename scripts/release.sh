@@ -2,8 +2,8 @@
 # Releases the kit: tags vX.Y.Z on a commit where every kit reference inside .github/ is pinned to vX.Y.Z, so a repo
 # running vX.Y.Z runs that version's files throughout, and the canary can try it before any other repo.
 # v1, which every repo runs, does not move here: sync.sh moves it once the canary repo passed on this exact
-# version (layer review, layer 4). Patch releases happen by themselves (selftest.yml's release job runs this with
-# `patch --ci`); a minor or major one is run by hand. Refuses unless main is pushed and selftest passed on it.
+# version (layer review, layer 4). Patch releases happen by themselves (sync.sh runs this with `patch` on the Mac,
+# since GitHub refuses a workflow's token here); a minor or major one is run by hand. Refuses unless main is pushed and selftest passed on it.
 # Usage: release.sh vX.Y.Z | patch [--ci]   (a breaking change is a new major: v2.0.0, then repos move one by one)
 set -euo pipefail
 v=${1:?usage: release.sh vX.Y.Z | patch [--ci]} ci=${2:-}
