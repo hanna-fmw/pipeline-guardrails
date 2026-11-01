@@ -19,7 +19,7 @@ jobs:
       ok: ${{ steps.check.outputs.ok }}
     steps:
       - id: check
-        uses: hanna-fmw/pipeline-guardrails/.github/actions/admin@v1
+        uses: hanna-fmw/pipeline-guardrails/.github/actions/admin@v1.3.40
 
   revert:
     needs: admin

@@ -1,7 +1,7 @@
 # The one Claude step for pipeline workflows: the AI rules live here, written once.
 #   Always: .env files denied, no attribution lines, the Swedish/no-trailer line.
 #   Inputs add to them per workflow: deny (more disallowed tools), instructions (more prompt), args (the rest).
-# uses: hanna-fmw/pipeline-guardrails/.github/actions/claude@v1
+# uses: hanna-fmw/pipeline-guardrails/.github/actions/claude@v1.3.40
 name: claude
 description: Run Claude Code with the pipeline's AI rules
 inputs:
