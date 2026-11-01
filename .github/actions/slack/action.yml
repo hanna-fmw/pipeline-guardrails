@@ -1,7 +1,7 @@
 # The one Slack step for pipeline workflows (build-system foundation plan: one procedure each).
 #   With text: posts it, with a link to the run. With clear: deletes this bot's messages there containing it.
 #   Always: puts slack-post on PATH, for workflows that post or edit from a script (the gate).
-# uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@v1
+# uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@v1.3.39
 name: slack
 description: Post to Slack, or make slack-post available to later steps
 inputs:

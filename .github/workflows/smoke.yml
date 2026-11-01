@@ -57,12 +57,12 @@ jobs:
           echo "checked=true" >> "$GITHUB_OUTPUT"
           echo "${problem:-Live on $SHA and answering.}"
       - if: steps.check.outputs.checked == 'true'
-        uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@v1
+        uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@v1.3.39
         with:
           token: ${{ secrets.SLACK_BOT_TOKEN }}
           clear: "${{ github.repository }} deploy:"
       - if: steps.check.outputs.problem != ''
-        uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@v1
+        uses: hanna-fmw/pipeline-guardrails/.github/actions/slack@v1.3.39
         with:
           token: ${{ secrets.SLACK_BOT_TOKEN }}
           text: "🔴 ${{ github.repository }} deploy: ${{ steps.check.outputs.problem }} (commit ${{ github.event.deployment.sha }})"
