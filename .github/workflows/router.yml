@@ -136,9 +136,9 @@ jobs:
   fix:
     if: >-
       ((github.event_name == 'pull_request_review_comment' || github.event_name == 'issue_comment')
-        && contains(github.event.comment.body, '@claude') && github.event.comment.author_association != 'NONE')
+        && contains(github.event.comment.body, '@claude') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
       || (github.event_name == 'issues' && github.event.action == 'opened'
-        && contains(github.event.issue.body, '@claude') && github.event.issue.author_association != 'NONE')
+        && contains(github.event.issue.body, '@claude') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
     uses: hanna-fmw/pipeline-guardrails/.github/workflows/claude-fix.yml@v1
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -152,7 +152,7 @@ jobs:
     if: >-
       (github.event_name == 'pull_request' && (github.event.action == 'closed' || github.event.action == 'edited' || github.event.label.name == 'owner-approved'))
       || (github.event_name == 'issue_comment' && github.event.issue.pull_request
-          && startsWith(github.event.comment.body, '/gate') && github.event.comment.author_association != 'NONE')
+          && startsWith(github.event.comment.body, '/gate') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
     uses: hanna-fmw/pipeline-guardrails/.github/workflows/gate.yml@v1
     with:
       pr: ${{ github.event.pull_request.number || github.event.issue.number }}
@@ -210,7 +210,7 @@ jobs:
   revert:
     if: >-
       github.event_name == 'issue_comment' && github.event.issue.pull_request
-      && startsWith(github.event.comment.body, '/revert') && github.event.comment.author_association != 'NONE'
+      && startsWith(github.event.comment.body, '/revert') && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
     uses: hanna-fmw/pipeline-guardrails/.github/workflows/revert.yml@v1
     with:
       pr: ${{ github.event.issue.number }}

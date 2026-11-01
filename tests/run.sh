@@ -25,6 +25,14 @@ check "sync.sh --help prints usage and does nothing" bash -c 'scripts/sync.sh --
 check "the AI rules live once: only the shared claude action calls Claude, and it denies .env and sets attribution off" bash -c '! grep -rq "anthropics/claude-code-action@" .github/workflows && a=.github/actions/claude/action.yml && grep -q "anthropics/claude-code-action@" $a && grep -q "Read(.env\*)" $a && grep -q "\"attribution\"" $a'
 check "sync.sh --drop refuses a kit-managed path" bash -c '! scripts/sync.sh --drop any/repo .claude/settings.json >/dev/null'
 check "approve.sh without arguments fails" bash -c '! scripts/approve.sh 2>/dev/null'
+# a comment or issue only triggers the pipeline from people with a real role in the repo
+trusted='["OWNER","MEMBER","COLLABORATOR"]'
+check "every @claude, /gate and /revert trigger lists only trusted roles" bash -c '
+  r=.github/workflows/router.yml
+  [ "$(grep -cF "contains(fromJSON('"'"'$0'"'"'), github.event." $r)" -eq 4 ] && [ "$(grep -c author_association $r)" -eq 4 ]' "$trusted"
+for outsider in NONE CONTRIBUTOR FIRST_TIME_CONTRIBUTOR FIRST_TIMER MANNEQUIN; do
+  check "$outsider cannot trigger the pipeline" bash -c 'jq -e --arg a "$1" "index(\$a) == null" <<<"$0" && ! grep -q "$1" .github/workflows/router.yml' "$trusted" "$outsider"
+done
 # secret hooks: a fake key is caught, clean text passes untouched
 check "scrub hook redacts a key" bash -c '[[ $1 == *"[REDACTED_"* && $1 != *"$2"* ]]' _ "$(scrub "token $fake here")" "$fake"
 check "scrub hook leaves clean output alone" test -z "$(scrub "nothing here")"
