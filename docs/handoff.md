@@ -12,7 +12,10 @@ Open work is in `docs/todo.md`. This file only holds what a next session can't w
 ## Portal deploy checks
 Hanna's yes in this session covered kit PRs 57 and 58, the release and portal PR #181. v1 is v1.3.38. #181 merged as 97346d8 and deployed; the first smoke run passed ("Live on 97346d8"). See `docs/todo.md` for what is still unproven.
 
+Failure alert proven 2026-11-01 with a fake deploy in fortnox-sandbox: it posted, and clearing deleted it. Clearing had never worked before: the Slack bot was not a member of #system (Hanna invited it).
+
 ## Traps
+- Slack clearing needs the bot in the channel; posting does not.
 - The kit's first real run of a new step found 3 bugs in a row: check the real run, not just tests.
 - Claude's review action refuses a PR that changes its workflow file.
 - GitHub reports an annotated tag's own id in `referenced_workflows`, not the commit's.
